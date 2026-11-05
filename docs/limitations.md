@@ -102,6 +102,7 @@ URL sharing and autosave have no control at all — they are design intentions, 
 table of [ADR 0003](adr/0003-local-first-no-backend.md), not shipped features. The centre canvas draws
 **jobs, not job instances** and says so on screen; the instance count is reported separately.
 
-The public repository, the Pages deployment and any published package do not exist. `.github/workflows/gate2.yml`
-is the local CI definition; it runs once the repository is opened, and Gate 2 (`CHANGELOG.md`) must be green
-before that happens.
+No package, container image or hosted Pages deployment has been published. The source repository is
+live at `HestiaLab/ActionLens`. Gate 2 (`CHANGELOG.md`) first went green in real CI on `main` at
+`2363021` (run `41977057618`); pushes to both `dev` and `main` are wired to `.github/workflows/gate2.yml`,
+but the `dev` branch has not had a run yet. Publishing remains an explicit act.

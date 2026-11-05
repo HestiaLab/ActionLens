@@ -77,10 +77,8 @@ because `secrets.*` is unknown by design and unavailable in `if:` regardless (ru
 
 ## Reporting
 
-Report vulnerabilities privately. The public repository does not exist yet (Gate 2 must pass first), so
-until it opens, contact the maintainers directly rather than filing a public issue. Once the repository
-exists, use its security advisories (`HestiaLab/ActionLens` → Security). Do not open a public issue for a
-reportable problem. Expect acknowledgement within five working days; fixes ship in a patch release with a
+Report vulnerabilities privately through the repository's security advisories
+(`HestiaLab/ActionLens` → Security). Do not open a public issue for a reportable problem. Expect acknowledgement within five working days; fixes ship in a patch release with a
 `CHANGELOG.md` entry that describes the impact without disclosing the exploit path.
 
 Anything that would make the tool *mislead* rather than crash — a silent `unknown` turned into a definite

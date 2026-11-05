@@ -443,6 +443,23 @@ Ui 24 → 25（`WorkspaceRenderTests`）；Playwright 6 → 8（DOM 身份保护
 2. 回退 workspace 收窄 → `RenderCount` 由 1 变 5，`WorkspaceRenderTests` 失败；收窄后恒为 1。
 3. 恢复「失败即关闭」的 `.catch()` → interop 探针只尝试 1 次回调而非 2 次，浏览器用例失败。
 
-**仍未执行**：`.github/workflows/gate2.yml` 在真实 GitHub Actions 上跑一次（需要公开仓库，
-工作副本无 `.git`），以及由此解锁的公开仓库 / Pages 部署、Q6 第二批结构重构。按 Q5/F 的裁决，
-这些都不应在本地伪造为已完成。
+**当时未执行**：`.github/workflows/gate2.yml` 在真实 GitHub Actions 上跑一次、Pages 部署，
+以及 Q6 第二批结构重构。按 Q5/F 的裁决，这些都不应在本地伪造为已完成。
+
+> **状态更新（2026-11-05 14:20）**：初始提交 `2363021` 已创建并推送到
+> `HestiaLab/ActionLens`，远端已有 `main` 与 `dev` 两个分支；本地已切到 `dev` 并跟踪
+> `origin/dev`，后续提交落到 `dev`。
+> **Gate 2 首次真实 CI 运行已通过**：`gate2` workflow run
+> [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618)，
+> `push` / `main` / `2363021` / conclusion `success`，`engine` 与 `browser` 两个 job 均绿
+> （2026-11-05 05:55 UTC，耗时 2m56s）。这把 §12「尚待在真实 CI 上跑一次」与 §15 的原待办
+> 推到了「已执行」，Q5/F 裁决里以 Gate 2 绿灯为前置条件的事项（Pages 部署、Q6 第二批结构重构）
+> 现在解锁，但**都还没有执行**。
+> **流程更新（2026-11-05 14:36）**：`dev` 已设置保护规则，不能直接 push。改为从 `dev` 开
+> 特性分支、推送后开 PR（base `dev`），由维护者合并；`dev` → `main` 另开一次评审 PR。
+> 相应的 PR 与合并分别触发一次 gate2，文档已同步到 `CONTRIBUTING.md` / `README.md`。
+> **精度边界**：该 run 跑的是初始提交，当时的 workflow 触发条件是 `[main]`、注释仍写 six criteria。
+> 本地 7 个未提交改动（把触发改为 `[main, dev]`、把注释改为 seven criteria、以及仓库状态文档对账）
+> 尚未提交、未推送、未经过 CI；`dev` 分支本身也从未触发过 workflow。因此不能把它读作
+> 「`dev` 已验证」或「当前工作区已验证」。
+> **仍待执行**：把这些改动提交到 `dev` 并让 `dev` 首次跑绿、Pages 部署、Q6 第二批结构重构。

@@ -29,9 +29,11 @@ npm run build:editor
 dotnet run --project src/ActionLens.App   # Blazor WebAssembly, served locally
 ```
 
-The public repository and the Pages demo do not exist yet. The clone line above is the intended
-address once Gate 2 passes; until then the sources live only in this working copy. See `CHANGELOG.md`
-for the Gate 2 criteria.
+Work lands on the `dev` integration branch through pull requests — `dev` is protected, so branch from
+it and open a PR rather than pushing directly. `main` is the stable branch, reached from `dev` through
+its own reviewed PR. Both are wired to the Gate 2 workflow on push (which first went green in CI on
+`main` at `2363021`). The Pages demo is not deployed yet — see `CHANGELOG.md` for the Gate 2 criteria
+and the release conditions.
 
 ## What it does today
 
