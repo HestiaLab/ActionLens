@@ -443,6 +443,58 @@ Ui 24 → 25（`WorkspaceRenderTests`）；Playwright 6 → 8（DOM 身份保护
 2. 回退 workspace 收窄 → `RenderCount` 由 1 变 5，`WorkspaceRenderTests` 失败；收窄后恒为 1。
 3. 恢复「失败即关闭」的 `.catch()` → interop 探针只尝试 1 次回调而非 2 次，浏览器用例失败。
 
-**仍未执行**：`.github/workflows/gate2.yml` 在真实 GitHub Actions 上跑一次（需要公开仓库，
-工作副本无 `.git`），以及由此解锁的公开仓库 / Pages 部署、Q6 第二批结构重构。按 Q5/F 的裁决，
-这些都不应在本地伪造为已完成。
+**当时未执行**：`.github/workflows/gate2.yml` 在真实 GitHub Actions 上跑一次、Pages 部署，
+以及 Q6 第二批结构重构。按 Q5/F 的裁决，这些都不应在本地伪造为已完成。
+
+> **状态更新（2026-11-05 14:20）**：初始提交 `2363021` 已创建并推送到
+> `HestiaLab/ActionLens`，远端已有 `main` 与 `dev` 两个分支；本地已切到 `dev` 并跟踪
+> `origin/dev`，后续提交落到 `dev`。
+> **Gate 2 首次真实 CI 运行已通过**：`gate2` workflow run
+> [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618)，
+> `push` / `main` / `2363021` / conclusion `success`，`engine` 与 `browser` 两个 job 均绿
+> （2026-11-05 05:55 UTC，耗时 2m56s）。这把 §12「尚待在真实 CI 上跑一次」与 §15 的原待办
+> 推到了「已执行」，Q5/F 裁决里以 Gate 2 绿灯为前置条件的事项（Pages 部署、Q6 第二批结构重构）
+> 现在解锁，但**都还没有执行**。
+> **流程更新（2026-11-05 14:36）**：`dev` 已设置保护规则，不能直接 push。改为从 `dev` 开
+> 特性分支、推送后开 PR（base `dev`），由维护者合并；`dev` → `main` 另开一次评审 PR。
+> 相应的 PR 与合并分别触发一次 gate2，文档已同步到 `CONTRIBUTING.md` / `README.md`。
+> **精度边界**：该 run 跑的是初始提交，当时的 workflow 触发条件是 `[main]`、注释仍写 six criteria。
+> 本地 7 个未提交改动（把触发改为 `[main, dev]`、把注释改为 seven criteria、以及仓库状态文档对账）
+> 尚未提交、未推送、未经过 CI；`dev` 分支本身也从未触发过 workflow。因此不能把它读作
+> 「`dev` 已验证」或「当前工作区已验证」。
+> **仍待执行**：把这些改动提交到 `dev` 并让 `dev` 首次跑绿、Pages 部署、Q6 第二批结构重构。
+
+---
+
+## 16. Q6 第二批：去重与 CI 技术债（2026-11-05 续三）
+
+Gate 2 在真实 CI 绿灯后，按 F 裁决解锁的「收窄 public 面 + 抽重复实现」开始逐项动。
+**先核实审阅结论再动手，结果修正了 §7 的两处描述**：
+
+- §7 说 Levenshtein `Distance` 有**三份**。实际只有两份是同构的两行动态规划
+  （`JobGraphAnalyzer.cs`、`RunnerLabelTypoRule.cs`）；`WorkflowModelBuilder.cs` 那份是
+  `Math.Abs(长度差) + Zip.Count(逐位不同)` 的**位置启发式**，不是编辑距离。把它换成
+  Levenshtein 会改变「Did you mean」给出的建议，属于行为变更而非去重。
+- §7 说 JSON/YAML → `GitHubValue` 有**三份**。实际是**两份** JSON→值
+  （`ExpressionEvaluator.JsonConverter`、`AnalysisInput.EventPayloadReader`）加**一份** YAML→值
+  （`WorkflowModelBuilder.ToValue`）。YAML 标量要按 YAML 规则解析并携带原文与位置，
+  `JsonElement` 不具备这些信息，不能合并。
+
+落地：
+- 新增 `src/ActionLens.Core/Text/EditDistance.cs`（`LevenshteinIgnoreCase`），两处 typo 规则改为调用它，
+  删掉各自的局部实现；`WorkflowModelBuilder` 的启发式保留并加注释说明为何不共享。
+- 新增 `src/ActionLens.Core/Values/JsonValueConverter.cs`，把 `EventPayloadReader` 与嵌套的
+  `JsonConverter` 合成一份，删掉两个重复类；`AnalysisInput.cs:276-277` 原本靠注释要求「两者必须一致」，
+  现在由结构保证。
+- `tests/ActionLens.Core.Tests/Values/SharedConvertersTests.cs`：编辑距离（含对称性、大小写）、
+  JSON 各类型映射、`ReadObject` 跳过键与 `TryWrap` 拒绝 null，共 7 条断言。
+- **收窄 public 面 / 拆超长文件仍未做**：那会改变约 55 个 public 类型的可见性并牵动大量测试，
+  属于独立的 API 决策，不在这一批。
+
+CI 技术债（上轮两条 annotation）：
+- `runner` 固定为 `ubuntu-24.04`，避免 `ubuntu-latest` 迁移到 Ubuntu 26 时静默改变 Chromium 系统依赖。
+- `actions/checkout`、`setup-dotnet`、`setup-node` 升到 `v5`、`upload-artifact` 升到 `v6`——
+  查过各 tag 的 `action.yml`：`v4` 是 node20，`v5`/`v6` 是首个 node24 稳定大版本；
+  不跳到 v7 以减小变更面。依据写在 workflow 顶部注释里。
+
+**复测**：构建 0/0 · 格式 0 · Core **1416**（新增 7 条）· Ui 25 · Playwright **8 / 8**。

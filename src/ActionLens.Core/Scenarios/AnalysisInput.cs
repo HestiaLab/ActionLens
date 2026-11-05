@@ -168,7 +168,7 @@ public sealed record AnalysisInput
         var eventSource = root.TryGetProperty("event", out var nested) && nested.ValueKind == JsonValueKind.Object
             ? nested
             : root;
-        var githubEvent = EventPayloadReader.ReadObject(eventSource, ["event_name", "vars"]);
+        var githubEvent = JsonValueConverter.ReadObject(eventSource, ["event_name", "vars"]);
         var github = new Dictionary<string, GitHubValue>(StringComparer.Ordinal)
         {
             ["event"] = GitHubValue.FromObject(githubEvent),
@@ -248,7 +248,7 @@ public sealed record AnalysisInput
         value = GitHubValue.Null;
         return element.ValueKind == JsonValueKind.Object
             && element.TryGetProperty(property, out var child)
-            && EventPayloadReader.TryWrap(child, out value);
+            && JsonValueConverter.TryWrap(child, out value);
     }
 
     /// <summary>Reads <c>parent.child.property</c> when all three exist and the last one is text.</summary>
@@ -275,7 +275,7 @@ public sealed record AnalysisInput
         var map = new Dictionary<string, GitHubValue>(StringComparer.Ordinal);
         foreach (var property in value.EnumerateObject())
         {
-            map[property.Name] = EventPayloadReader.ToValue(property.Value);
+            map[property.Name] = JsonValueConverter.ToValue(property.Value);
         }
 
         return map;
@@ -289,48 +289,4 @@ public sealed record AnalysisInput
         JsonValueKind.True or JsonValueKind.False => "a JSON boolean",
         _ => "null",
     };
-}
-
-/// <summary>
-/// Turns JSON elements into workflow values, the same six types <c>fromJSON()</c> produces. Kept next to
-/// <see cref="AnalysisInput"/> rather than in the evaluator because the payload reader is the only other
-/// caller and the two must agree on what a JSON number becomes.
-/// </summary>
-internal static class EventPayloadReader
-{
-    internal static Dictionary<string, GitHubValue> ReadObject(JsonElement element, string[] skip)
-    {
-        var map = new Dictionary<string, GitHubValue>(StringComparer.Ordinal);
-        foreach (var property in element.EnumerateObject())
-        {
-            if (Array.IndexOf(skip, property.Name) >= 0)
-            {
-                continue;
-            }
-
-            map[property.Name] = ToValue(property.Value);
-        }
-
-        return map;
-    }
-
-    internal static GitHubValue ToValue(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.Null or JsonValueKind.Undefined => GitHubValue.Null,
-        JsonValueKind.True => GitHubValue.True,
-        JsonValueKind.False => GitHubValue.False,
-        JsonValueKind.String => GitHubValue.FromString(element.GetString() ?? string.Empty),
-        JsonValueKind.Number => GitHubValue.FromNumber(element.GetDouble()),
-        JsonValueKind.Array => GitHubValue.FromArray(
-            element.EnumerateArray().Select(ToValue).ToArray()),
-        JsonValueKind.Object => GitHubValue.FromObject(ReadObject(element, [])),
-        _ => GitHubValue.Null,
-    };
-
-    /// <summary>Wraps any JSON value, but reports a missing or null one as "no value" rather than a member.</summary>
-    internal static bool TryWrap(JsonElement element, out GitHubValue value)
-    {
-        value = ToValue(element);
-        return element.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
-    }
 }

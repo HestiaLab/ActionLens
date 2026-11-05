@@ -1,19 +1,26 @@
 # Gate 2 — the release gate for ActionLens
 #
-# This is the executable form of the six criteria in CHANGELOG.md ("Gate 2 — the release gate").
+# This is the executable form of the seven criteria in CHANGELOG.md ("Gate 2 — the release gate").
 # It is deliberately strict: TreatWarningsAsErrors is on, `dotnet format` is a hard gate, both xUnit
 # v3 / Microsoft.Testing.Platform assemblies run as executables (dotnet test is not supported on this
 # SDK), and the Playwright suite drives a real Chromium against the real WASM host.
 #
-# No deployment job is defined here. Creating the public repository and the Pages deployment happens
-# only after this workflow is green (decision Q5 in docs/review-v1-grill.md); publishing is a separate,
-# explicit act.
+# Both integration branches are gated: day-to-day commits land on `dev`, and `main` is the stable
+# branch they are merged into. A commit on either one runs the same checks.
+#
+# No deployment job is defined here. Creating the Pages deployment happens only after this workflow is
+# green (decision Q5 in docs/review-v1-grill.md); publishing is a separate, explicit act.
+#
+# Runner and action versions are pinned deliberately: `ubuntu-latest` migrates to Ubuntu 26, and the
+# v4 actions ran on Node 20 (which runners forced onto Node 24 with a deprecation notice). v5/v6 are
+# the first stable majors built on Node 24; pin the image so a runner-image change cannot silently
+# alter Chromium's system dependencies.
 
 name: gate2
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
@@ -24,15 +31,15 @@ concurrency:
 jobs:
   engine:
     name: build, format and xUnit v3
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -62,16 +69,16 @@ jobs:
 
   browser:
     name: Playwright (real Chromium)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: engine
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -90,7 +97,7 @@ jobs:
         env:
           CI: 'true'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: playwright-report

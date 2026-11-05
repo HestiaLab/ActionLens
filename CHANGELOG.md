@@ -10,9 +10,10 @@ per release.
 
 ## [Unreleased]
 
-Nothing is released yet. The repository is being developed locally; there is no published package,
-container image or hosted deployment. Gate 1 passed 2026-11-04; **Gate 2** is the condition below for
-creating the public repository (`HestiaLab/ActionLens`, Apache-2.0) and the first Pages deployment.
+Nothing is released yet — no published package, container image or hosted Pages deployment. The source
+repository is live at `HestiaLab/ActionLens`, with `dev` as the integration branch and `main` as the
+stable branch. Gate 1 passed 2026-11-04; **Gate 2** below is the condition for the first release and
+Pages deployment.
 
 ### Gate 2 — the release gate
 
@@ -33,8 +34,13 @@ Gate 2 is all of the following, run locally first and then in `.github/workflows
    byte-identical exports, and session notifications that do not change the document do not re-render
    the shell.
 
-Until all seven hold, no public repository, no Pages deployment and no "verified" claim. Gate 1's engine
-decision was never a release decision.
+All seven held in the first real CI run: `gate2` on `main` at `2363021`
+(run [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618), 2026-11-05,
+both `engine` and `browser` jobs green). **That run covers the initial commit only.** The `dev`
+branch has not triggered CI yet, and the working-copy edits that add `dev` to the workflow's push
+trigger are themselves uncommitted. No release, no Pages deployment and no "verified" claim follows
+from a green run alone — publishing remains an explicit act. Gate 1's engine decision was never a
+release decision.
 
 ### Added
 
@@ -75,6 +81,24 @@ decision was never a release decision.
 - Documentation: `ARCHITECTURE.md`, `docs/expression-semantics.md`, `docs/limitations.md`, four ADRs,
   `docs/gate1-report.md`, `docs/w4-verification.md`, `docs/review-v1-grill.md`, `SECURITY.md`,
   `CONTRIBUTING.md`, and `docs/notes/atlas-0.4.0-api.md`.
+
+### Changed — Q6 second batch: shared conversions and CI currency (2026-11-05)
+
+Gate 2 went green in CI, unlocking the post-gate structural work (decision F). Reviewing the code
+corrected two claims in `docs/review-v1-grill.md` §7: there are **two** Levenshtein copies, not three
+(the third is a positional hint heuristic with different behaviour), and **two** JSON→value copies, not
+three (the third converts YAML, which needs scalar resolution and source positions).
+
+- `Text/EditDistance.cs` now owns `LevenshteinIgnoreCase`; `JobGraphAnalyzer` and `RunnerLabelTypoRule`
+  call it instead of carrying their own copies. The `WorkflowModelBuilder` heuristic stays separate,
+  with a comment explaining why sharing it would change the suggestion a reader sees.
+- `Values/JsonValueConverter.cs` now owns the JSON→`GitHubValue` mapping used by both `fromJSON()` and
+  the event payload reader. The "the two must agree" comment in `AnalysisInput.cs` is now enforced by
+  structure rather than by discipline. Seven new assertions in `SharedConvertersTests` pin the mapping.
+- CI: runner pinned to `ubuntu-24.04`; `checkout`/`setup-dotnet`/`setup-node` → v5 and
+  `upload-artifact` → v6 (first Node-24 stable majors), removing both runner annotations.
+- Narrowing the public surface and splitting the ~1400-line builder are **not** in this batch: those
+  change API visibility and need their own decision.
 
 ### Added — determinism, render narrowing and interop recovery (2026-11-05)
 

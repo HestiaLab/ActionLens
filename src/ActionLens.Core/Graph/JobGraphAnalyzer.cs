@@ -329,7 +329,7 @@ internal sealed class JobGraphAnalyzer
         {
             // A distance of 0 is the plain capitalisation typo and the best answer there is, so only
             // the budget filters candidates out; identical ids never reach this method.
-            var distance = Distance(name, job.Id);
+            var distance = EditDistance.LevenshteinIgnoreCase(name, job.Id);
             if (distance > budget)
             {
                 continue;
@@ -350,34 +350,5 @@ internal sealed class JobGraphAnalyzer
         return tied || suggestion is null
             ? null
             : $"Did you mean '{suggestion}'?";
-
-        static int Distance(string left, string right)
-        {
-            // Case-insensitive on purpose: a capitalisation slip is the friendliest typo to catch, and
-            // the message still quotes the id with its real spelling.
-            var a = left.ToLowerInvariant();
-            var b = right.ToLowerInvariant();
-            var previous = new int[b.Length + 1];
-            var current = new int[b.Length + 1];
-
-            for (var j = 0; j <= b.Length; j++)
-            {
-                previous[j] = j;
-            }
-
-            for (var i = 1; i <= a.Length; i++)
-            {
-                current[0] = i;
-                for (var j = 1; j <= b.Length; j++)
-                {
-                    var cost = a[i - 1] == b[j - 1] ? 0 : 1;
-                    current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
-                }
-
-                (previous, current) = (current, previous);
-            }
-
-            return previous[b.Length];
-        }
     }
 }
