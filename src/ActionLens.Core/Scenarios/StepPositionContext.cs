@@ -20,7 +20,7 @@ namespace ActionLens.Core.Scenarios;
 /// its own condition does not make a later step's <c>success()</c> false.
 /// </para>
 /// </remarks>
-public sealed class StepPositionContext : EvaluationPosition
+internal sealed class StepPositionContext : EvaluationPosition
 {
     public StepPositionContext(EvaluationScope scope)
         : base(scope, EvaluationPositionKind.Step)

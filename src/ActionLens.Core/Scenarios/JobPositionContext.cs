@@ -13,7 +13,7 @@ namespace ActionLens.Core.Scenarios;
 /// from the upstream jobs the engine already resolved, which is why this class takes the computed
 /// <see cref="EvaluationScope.Needs"/> instead of asking the run anything.
 /// </remarks>
-public sealed class JobPositionContext : EvaluationPosition
+internal sealed class JobPositionContext : EvaluationPosition
 {
     public JobPositionContext(EvaluationScope scope)
         : base(scope, EvaluationPositionKind.Job)

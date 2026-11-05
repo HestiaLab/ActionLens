@@ -19,7 +19,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// <c>run: |</c> body is not on the field's line.
 /// </para>
 /// </remarks>
-public sealed class ScriptInjectionRule : ILintRule
+internal sealed class ScriptInjectionRule : ILintRule
 {
     private static readonly string[] UntrustedRoots = ["github.event", "github.head_ref"];
 

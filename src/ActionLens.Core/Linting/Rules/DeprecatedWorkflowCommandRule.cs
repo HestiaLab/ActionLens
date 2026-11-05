@@ -14,7 +14,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// parser this layer is not; the limit is stated here rather than hidden.
 /// </para>
 /// </remarks>
-public sealed class DeprecatedWorkflowCommandRule : ILintRule
+internal sealed class DeprecatedWorkflowCommandRule : ILintRule
 {
     private static readonly (string Command, string Replacement)[] Deprecated =
     [

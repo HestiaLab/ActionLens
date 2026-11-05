@@ -82,6 +82,34 @@ never a release decision.
   `docs/gate1-report.md`, `docs/w4-verification.md`, `docs/review-v1-grill.md`, `SECURITY.md`,
   `CONTRIBUTING.md`, and `docs/notes/atlas-0.4.0-api.md`.
 
+### Changed — one public entry point (2026-11-05)
+
+Decision F asked for a narrower public surface; §7 recorded roughly 55 of 60 Core files exposing a
+public type. The boundary was determined by the compiler, not by guesswork: 41 candidate types never
+named outside Core were made `internal`, and every type the compiler rejected (CS0050/51/53/60,
+because a public signature references it) was restored. Three iterations converged.
+
+- 27 types are now internal: `ScenarioEngine`, `LintEngine`, the eight lint rule implementations,
+  `ScenarioEvaluation`/`JobScenarioResult`, `ConditionEvaluator`, `ExpressionFunctions`, expression
+  node subtypes, `EvaluationScope` and friends.
+- 15 stay public because they *are* the contract: `ExpressionNode`, `ILintRule`, the lint result
+  types, `MatrixCombination`/`MatrixRun`, `JobGraphEdge`/`JobGraphAnalysisResult`, `StepDefinition`,
+  `DefaultsSection`, `ConcurrencySection`, `WorkflowInput`, `TemplateSegment`.
+- `PublicSurfaceTests` (11 assertions) pins the boundary against a future "just make it public" edit;
+  the compiler already enforces the opposite direction.
+
+This also fixed a real defect §7 had only flagged by inspection. `ScenarioEngine.Run` took the
+workflow and the job graph as two independent arguments and indexed `_jobs[jobId]` directly, so a
+caller supplying a graph built from a different document got a raw `KeyNotFoundException`. Making the
+engine internal removes that path for external callers; inside, `ScenarioRunner` now filters ids it
+cannot place and emits an `INT001` diagnostic per unknown id instead of throwing or inventing a
+result. `ScenarioEngineMismatchTests` reproduces the mismatch and an A/B check confirms it fails
+again when the guard is removed.
+
+Splitting the long files (`WorkflowModelBuilder`, `TriggerEvaluator`, `ExpressionBodyParser`,
+`AnalysisReportJson`) is mechanical and remains for a later batch. Pages deployment and the first
+release are still explicit, unperformed acts.
+
 ### Changed — Q6 second batch: shared conversions and CI currency (2026-11-05)
 
 Gate 2 went green in CI, unlocking the post-gate structural work (decision F). Reviewing the code

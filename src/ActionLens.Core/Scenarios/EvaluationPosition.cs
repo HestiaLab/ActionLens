@@ -20,7 +20,7 @@ namespace ActionLens.Core.Scenarios;
 /// reason travels with the value in every unknown the evaluator produces.
 /// </para>
 /// </remarks>
-public abstract class EvaluationPosition : IContextProvider
+internal abstract class EvaluationPosition : IContextProvider
 {
     /// <summary>
     /// What <c>jobs.&lt;job_id&gt;.if</c> may read. <c>env</c>, <c>matrix</c>, <c>strategy</c>,

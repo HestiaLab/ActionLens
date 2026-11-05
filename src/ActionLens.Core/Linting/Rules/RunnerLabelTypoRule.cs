@@ -24,7 +24,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// belong to the organisation.
 /// </para>
 /// </remarks>
-public sealed class RunnerLabelTypoRule : ILintRule
+internal sealed class RunnerLabelTypoRule : ILintRule
 {
     /// <summary>
     /// The documented hosted labels, kept small on purpose: the rule only judges near-misses, so an entry the

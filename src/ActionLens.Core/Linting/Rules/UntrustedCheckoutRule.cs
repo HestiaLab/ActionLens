@@ -22,7 +22,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// job selector in the workflow syntax to check instead.
 /// </para>
 /// </remarks>
-public sealed class UntrustedCheckoutRule : ILintRule
+internal sealed class UntrustedCheckoutRule : ILintRule
 {
     private static readonly string[] HeadRefPaths = ["github.head_ref", "github.event.pull_request.head"];
 

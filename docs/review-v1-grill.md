@@ -497,3 +497,55 @@ CI 技术债（上轮两条 annotation）：
   不跳到 v7 以减小变更面。依据写在 workflow 顶部注释里。
 
 **复测**：构建 0/0 · 格式 0 · Core **1416**（新增 7 条）· Ui 25 · Playwright **8 / 8**。
+
+---
+
+## 17. 收窄 public 面与修复不一致 graph（2026-11-05 续四）
+
+§16 把「收窄 public 面」标成独立的 API 决策留待后续。合并到 `dev`、Gate 2 在 `main`/`dev`/PR
+三种事件下都跑绿之后，这一批开始动它。**先复现再修，修正了 §7 的一处描述**：
+
+### 17.1 真实缺陷：不一致的 workflow 与 graph
+
+§7 记 `ScenarioEngine.Run`（`:141`、`:214`）用 `_jobs[jobId]` 直接索引，外部传入不一致的
+graph 会抛 `KeyNotFoundException`。本轮写了
+`tests/ActionLens.Core.Tests/Scenarios/ScenarioEngineMismatchTests.cs` 复现：把 `one.yml` 的模型
+与 `two.yml` 的 graph 一起传入，得到 `KeyNotFoundException: 'build'`。`WorkflowAnalyzer` 内部
+总是传匹配的一对（且有 INT001 兜底），但 `ScenarioEngine.Run` 本身是 public，外部可绕过入口。
+
+修复（两条，方向都是「唯一入口」）：
+- `ScenarioEngine` 由 `public` 收窄为 `internal`——`WorkflowAnalyzer` 是唯一 public 入口，
+  外部不再能构造不一致的一对。测试靠 `InternalsVisibleTo` 仍可直接调用。
+- `ScenarioRunner.Run` 在遍历 `TopologicalOrder` / `BlockedJobs` 前用 `_jobs.ContainsKey` 过滤，
+  并新增 `ReportGraphJobsMissingFromWorkflow()`：每个无法定位的 job id 产出一条 INT001 / Internal /
+  Error 诊断，说明「graph 含该 id 但 workflow 没有」，建议从同一个 workflow 建 graph。
+  不抛异常、不给这些 job 编造结果（`Jobs` 为空），符合「宁可诚实未知，也不自信给错答案」。
+
+**A/B**：临时恢复裸索引 → 复现用例重新抛 `KeyNotFoundException`；恢复修复后通过。
+
+### 17.2 批量收窄，边界交给编译器
+
+方法：先筛出「Ui / App / 两个测试程序集里从未按名字引用」的 41 个 Core public 类型；
+批量改成 `internal` 后编译，按 CS0050/CS0051/CS0053/CS0060 报出的「可访问性不一致」逐个回退，
+迭代 3 轮收敛。**这不是靠猜的边界**——被 public 签名引用的类型无法改成 internal，编译器会拒绝。
+
+结果：
+- **27 个类型收窄**（41 个候选中 26 个 + `LintEngine`），包括 `ScenarioEngine`、
+  `ScenarioEvaluation` / `JobScenarioResult`、8 个 lint 规则类、`ConditionEvaluator` /
+  `ExpressionFunctions` / `ConditionOutcome`、表达式节点派生类、`EvaluationScope` 等内部构件。
+- **15 个保留 public**：`ExpressionNode`、`ILintRule`、`LintContext` / `LintResult` /
+  `LintFinding` / `LintCondition`、`MatrixCombination` / `MatrixRun`、`JobGraphEdge` /
+  `JobGraphAnalysisResult`、`StepDefinition` / `DefaultsSection` / `ConcurrencySection` /
+  `WorkflowInput` / `TemplateSegment`。它们出现在 public 属性/方法签名里，是 JSON 导出与 UI 真正
+  依赖的契约，不是「忘了收窄」。
+- 新增 `tests/ActionLens.Core.Tests/PublicSurfaceTests.cs`（11 条断言）：契约类型保持 public、
+  实现类型不重新导出、public 的 `*Engine` 里不含 `ScenarioEngine` / `LintEngine`。
+  编译器保证另一半边界（public 签名不能引用 internal 类型），护栏保证这一半不回退。
+
+### 17.3 仍未做
+
+拆超长文件（`WorkflowModelBuilder` 1444、`TriggerEvaluator` 903、`ExpressionBodyParser` 757、
+`AnalysisReportJson` 559）是纯机械重构，独立于 API 决策，留到下一批；Pages 部署与首个 release、
+ADR 0003 Deferred 产品功能（Q2 已否决）同样未动。
+
+**复测**：构建 0/0 · 格式 0 · Core **1430** · Ui 25 · Playwright **8 / 8**。
