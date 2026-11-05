@@ -446,23 +446,20 @@ Ui 24 → 25（`WorkspaceRenderTests`）；Playwright 6 → 8（DOM 身份保护
 **当时未执行**：`.github/workflows/gate2.yml` 在真实 GitHub Actions 上跑一次、Pages 部署，
 以及 Q6 第二批结构重构。按 Q5/F 的裁决，这些都不应在本地伪造为已完成。
 
-> **状态更新（2026-11-05 14:20）**：初始提交 `2363021` 已创建并推送到
-> `HestiaLab/ActionLens`，远端已有 `main` 与 `dev` 两个分支；本地已切到 `dev` 并跟踪
-> `origin/dev`，后续提交落到 `dev`。
-> **Gate 2 首次真实 CI 运行已通过**：`gate2` workflow run
-> [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618)，
-> `push` / `main` / `2363021` / conclusion `success`，`engine` 与 `browser` 两个 job 均绿
-> （2026-11-05 05:55 UTC，耗时 2m56s）。这把 §12「尚待在真实 CI 上跑一次」与 §15 的原待办
-> 推到了「已执行」，Q5/F 裁决里以 Gate 2 绿灯为前置条件的事项（Pages 部署、Q6 第二批结构重构）
-> 现在解锁，但**都还没有执行**。
-> **流程更新（2026-11-05 14:36）**：`dev` 已设置保护规则，不能直接 push。改为从 `dev` 开
-> 特性分支、推送后开 PR（base `dev`），由维护者合并；`dev` → `main` 另开一次评审 PR。
-> 相应的 PR 与合并分别触发一次 gate2，文档已同步到 `CONTRIBUTING.md` / `README.md`。
-> **精度边界**：该 run 跑的是初始提交，当时的 workflow 触发条件是 `[main]`、注释仍写 six criteria。
-> 本地 7 个未提交改动（把触发改为 `[main, dev]`、把注释改为 seven criteria、以及仓库状态文档对账）
-> 尚未提交、未推送、未经过 CI；`dev` 分支本身也从未触发过 workflow。因此不能把它读作
-> 「`dev` 已验证」或「当前工作区已验证」。
-> **仍待执行**：把这些改动提交到 `dev` 并让 `dev` 首次跑绿、Pages 部署、Q6 第二批结构重构。
+> **状态更新（2026-11-05 15:30，合并后复核）**：PR #1 已 `MERGED`（squash 为 `f07a096`），
+> 特性分支已从远端删除；`main` 仍在 `2363021`。`dev` 受保护，后续改动从 `dev` 开特性分支、
+> 开 PR（base `dev`）由维护者合并；`dev` → `main` 另开评审 PR。
+> **Gate 2 的全部真实 CI 运行均为 `success`**：
+> - `41977057618` — `push` / `main` / `2363021`（首次，2m56s）
+> - `41981780325`、`41986150317` — `pull_request` / PR #1 的两个提交（含改后 workflow）
+> - `41987481649` — `push` / `dev` / `f07a096`（`dev` 分支首次，两 job 均绿）
+>
+> 因此上一版写的「精度边界」（改动尚未提交/推送/经过 CI、`dev` 从未触发 workflow）已全部解除：
+> 改后的 workflow（触发 `[main, dev]`、seven criteria 注释、v5/v6 actions、`ubuntu-24.04`）
+> 已在 PR 与 `dev` push 两种事件下跑绿。Q5/F 里以 Gate 2 绿灯为前置的 Pages 部署与 Q6
+> 第二批结构重构已解锁；后者已由 §16 完成去重与 CI 技术债部分。
+> **仍待执行**：`dev` → `main` 评审 PR、Pages 首次部署与首个 release、§16 明确留下的
+> 「收窄 public 面 / 拆超长文件」，以及 ADR 0003 Deferred 的产品功能（Q2 已否决，须重开 ADR）。
 
 ---
 
@@ -489,7 +486,9 @@ Gate 2 在真实 CI 绿灯后，按 F 裁决解锁的「收窄 public 面 + 抽�
 - `tests/ActionLens.Core.Tests/Values/SharedConvertersTests.cs`：编辑距离（含对称性、大小写）、
   JSON 各类型映射、`ReadObject` 跳过键与 `TryWrap` 拒绝 null，共 7 条断言。
 - **收窄 public 面 / 拆超长文件仍未做**：那会改变约 55 个 public 类型的可见性并牵动大量测试，
-  属于独立的 API 决策，不在这一批。
+  属于独立的 API 决策，不在这一批。但本批新增的两个共享类最初误写成 `public`，等于反向扩大了
+  public 面；合并后已改回 `internal`（`InternalsVisibleTo` 已配置，测试不受影响），并加
+  `SharedHelpers_AreNotPartOfThePublicApi` 护栏断言防止回退。
 
 CI 技术债（上轮两条 annotation）：
 - `runner` 固定为 `ubuntu-24.04`，避免 `ubuntu-latest` 迁移到 Ubuntu 26 时静默改变 Chromium 系统依赖。
@@ -498,3 +497,55 @@ CI 技术债（上轮两条 annotation）：
   不跳到 v7 以减小变更面。依据写在 workflow 顶部注释里。
 
 **复测**：构建 0/0 · 格式 0 · Core **1416**（新增 7 条）· Ui 25 · Playwright **8 / 8**。
+
+---
+
+## 17. 收窄 public 面与修复不一致 graph（2026-11-05 续四）
+
+§16 把「收窄 public 面」标成独立的 API 决策留待后续。合并到 `dev`、Gate 2 在 `main`/`dev`/PR
+三种事件下都跑绿之后，这一批开始动它。**先复现再修，修正了 §7 的一处描述**：
+
+### 17.1 真实缺陷：不一致的 workflow 与 graph
+
+§7 记 `ScenarioEngine.Run`（`:141`、`:214`）用 `_jobs[jobId]` 直接索引，外部传入不一致的
+graph 会抛 `KeyNotFoundException`。本轮写了
+`tests/ActionLens.Core.Tests/Scenarios/ScenarioEngineMismatchTests.cs` 复现：把 `one.yml` 的模型
+与 `two.yml` 的 graph 一起传入，得到 `KeyNotFoundException: 'build'`。`WorkflowAnalyzer` 内部
+总是传匹配的一对（且有 INT001 兜底），但 `ScenarioEngine.Run` 本身是 public，外部可绕过入口。
+
+修复（两条，方向都是「唯一入口」）：
+- `ScenarioEngine` 由 `public` 收窄为 `internal`——`WorkflowAnalyzer` 是唯一 public 入口，
+  外部不再能构造不一致的一对。测试靠 `InternalsVisibleTo` 仍可直接调用。
+- `ScenarioRunner.Run` 在遍历 `TopologicalOrder` / `BlockedJobs` 前用 `_jobs.ContainsKey` 过滤，
+  并新增 `ReportGraphJobsMissingFromWorkflow()`：每个无法定位的 job id 产出一条 INT001 / Internal /
+  Error 诊断，说明「graph 含该 id 但 workflow 没有」，建议从同一个 workflow 建 graph。
+  不抛异常、不给这些 job 编造结果（`Jobs` 为空），符合「宁可诚实未知，也不自信给错答案」。
+
+**A/B**：临时恢复裸索引 → 复现用例重新抛 `KeyNotFoundException`；恢复修复后通过。
+
+### 17.2 批量收窄，边界交给编译器
+
+方法：先筛出「Ui / App / 两个测试程序集里从未按名字引用」的 41 个 Core public 类型；
+批量改成 `internal` 后编译，按 CS0050/CS0051/CS0053/CS0060 报出的「可访问性不一致」逐个回退，
+迭代 3 轮收敛。**这不是靠猜的边界**——被 public 签名引用的类型无法改成 internal，编译器会拒绝。
+
+结果：
+- **27 个类型收窄**（41 个候选中 26 个 + `LintEngine`），包括 `ScenarioEngine`、
+  `ScenarioEvaluation` / `JobScenarioResult`、8 个 lint 规则类、`ConditionEvaluator` /
+  `ExpressionFunctions` / `ConditionOutcome`、表达式节点派生类、`EvaluationScope` 等内部构件。
+- **15 个保留 public**：`ExpressionNode`、`ILintRule`、`LintContext` / `LintResult` /
+  `LintFinding` / `LintCondition`、`MatrixCombination` / `MatrixRun`、`JobGraphEdge` /
+  `JobGraphAnalysisResult`、`StepDefinition` / `DefaultsSection` / `ConcurrencySection` /
+  `WorkflowInput` / `TemplateSegment`。它们出现在 public 属性/方法签名里，是 JSON 导出与 UI 真正
+  依赖的契约，不是「忘了收窄」。
+- 新增 `tests/ActionLens.Core.Tests/PublicSurfaceTests.cs`（11 条断言）：契约类型保持 public、
+  实现类型不重新导出、public 的 `*Engine` 里不含 `ScenarioEngine` / `LintEngine`。
+  编译器保证另一半边界（public 签名不能引用 internal 类型），护栏保证这一半不回退。
+
+### 17.3 仍未做
+
+拆超长文件（`WorkflowModelBuilder` 1444、`TriggerEvaluator` 903、`ExpressionBodyParser` 757、
+`AnalysisReportJson` 559）是纯机械重构，独立于 API 决策，留到下一批；Pages 部署与首个 release、
+ADR 0003 Deferred 产品功能（Q2 已否决）同样未动。
+
+**复测**：构建 0/0 · 格式 0 · Core **1430** · Ui 25 · Playwright **8 / 8**。

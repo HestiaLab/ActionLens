@@ -10,7 +10,7 @@ namespace ActionLens.Core.Text;
 /// still quotes the id or label with the spelling the author used. This is a suggestion heuristic, not
 /// a general-purpose string metric — callers own their own distance budget.
 /// </remarks>
-public static class EditDistance
+internal static class EditDistance
 {
     /// <summary>The number of single-character edits between two strings, ignoring case.</summary>
     public static int LevenshteinIgnoreCase(string left, string right)

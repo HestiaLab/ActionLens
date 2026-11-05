@@ -11,6 +11,17 @@ namespace ActionLens.Core.Tests.Values;
 /// </summary>
 public sealed class SharedConvertersTests
 {
+    /// <summary>
+    /// These are implementation details shared inside the engine, not API. Decision F asks for a
+    /// narrower public surface; making a helper public again would work against it.
+    /// </summary>
+    [Fact]
+    public void SharedHelpers_AreNotPartOfThePublicApi()
+    {
+        Assert.False(typeof(EditDistance).IsPublic);
+        Assert.False(typeof(JsonValueConverter).IsPublic);
+    }
+
     [Theory]
     [InlineData("build", "Build", 0)]
     [InlineData("build", "buidl", 2)]

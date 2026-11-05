@@ -13,7 +13,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// the only accepted pin — a short SHA is called out as truncated rather than counted as pinned.
 /// </para>
 /// </remarks>
-public sealed class ActionNotPinnedRule : ILintRule
+internal sealed class ActionNotPinnedRule : ILintRule
 {
     public LintRuleDescriptor Descriptor => LintRuleTable.ActionNotPinned;
 

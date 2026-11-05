@@ -17,7 +17,7 @@ namespace ActionLens.Core.Linting;
 /// than of eight authors' good intentions.
 /// </para>
 /// </remarks>
-public static class LintEngine
+internal static class LintEngine
 {
     /// <summary>Every rule ActionLens ships, in id order — AL001 through AL008.</summary>
     public static IReadOnlyList<ILintRule> Rules { get; } =

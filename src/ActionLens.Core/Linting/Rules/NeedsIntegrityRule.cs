@@ -16,7 +16,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// graph stage produced it before any condition was evaluated.
 /// </para>
 /// </remarks>
-public sealed class NeedsIntegrityRule : ILintRule
+internal sealed class NeedsIntegrityRule : ILintRule
 {
     public LintRuleDescriptor Descriptor => LintRuleTable.NeedsIntegrity;
 

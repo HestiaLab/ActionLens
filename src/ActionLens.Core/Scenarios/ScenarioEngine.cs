@@ -13,6 +13,9 @@ namespace ActionLens.Core.Scenarios;
 /// evaluator — into one answer for one scenario: which jobs run, which do not, and why.
 /// </summary>
 /// <remarks>
+/// Internal on purpose: <see cref="WorkflowAnalyzer"/> is the one entry point, and it always builds the
+/// graph from the workflow it passes here. Exposing this as a public entry point let a caller supply a
+/// graph from a different document and get a KeyNotFoundException from the middle of the walk.
 /// The engine walks the graph in topological order and never looks ahead, so a job's <c>needs</c> always
 /// hold finished outcomes by the time its condition is read. Two rules do most of the work:
 /// <list type="number">
@@ -29,7 +32,7 @@ namespace ActionLens.Core.Scenarios;
 /// position either: their state is unknown with a reason naming the cycle, even when their condition would
 /// have evaluated to true.
 /// </remarks>
-public static class ScenarioEngine
+internal static class ScenarioEngine
 {
     /// <summary>
     /// Evaluates one workflow under one scenario.
@@ -106,16 +109,25 @@ internal sealed class ScenarioRunner
     internal ScenarioEvaluation Run()
     {
         ReportPinsThatNameNoJob();
+        ReportGraphJobsMissingFromWorkflow();
         var outputs = CollectJobOutputs();
 
         foreach (var jobId in _graph.TopologicalOrder)
         {
-            Place(jobId, outputs);
+            // A graph built from a different workflow names ids this model cannot place. Say so and
+            // keep walking the rest rather than throwing from the middle of the pass.
+            if (_jobs.ContainsKey(jobId))
+            {
+                Place(jobId, outputs);
+            }
         }
 
         foreach (var jobId in _graph.BlockedJobs)
         {
-            PlaceWithoutOrder(jobId, outputs);
+            if (_jobs.ContainsKey(jobId))
+            {
+                PlaceWithoutOrder(jobId, outputs);
+            }
         }
 
         var jobs = new List<JobScenarioResult>(_graph.JobIds.Count);
@@ -286,6 +298,34 @@ internal sealed class ScenarioRunner
                 });
                 return;
             }
+        }
+    }
+
+    /// <summary>
+    /// The workflow and the graph arrive as two independent arguments. <see cref="WorkflowAnalyzer"/>
+    /// always passes a matching pair, but a caller of the API can pass a graph built from a different
+    /// document. Those ids have no definition to place, so name them as an internal failure instead of
+    /// letting a dictionary index throw from inside the walk.
+    /// </summary>
+    private void ReportGraphJobsMissingFromWorkflow()
+    {
+        foreach (var jobId in _graph.JobIds)
+        {
+            if (_jobs.ContainsKey(jobId))
+            {
+                continue;
+            }
+
+            _findings.Add(new Diagnostic
+            {
+                Code = DiagnosticCodes.AnalysisFailed,
+                Severity = DiagnosticSeverity.Error,
+                Stage = DiagnosticStage.Internal,
+                Message = $"The job graph contains '{jobId}', but the workflow has no job with that id, " +
+                    "so that job's run cannot be evaluated.",
+                Range = SourceRange.Unknown,
+                Suggestion = "Build the graph from the same workflow that is passed to the scenario engine.",
+            });
         }
     }
 

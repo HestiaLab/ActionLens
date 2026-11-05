@@ -36,11 +36,11 @@ Gate 2 is all of the following, run locally first and then in `.github/workflows
 
 All seven held in the first real CI run: `gate2` on `main` at `2363021`
 (run [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618), 2026-11-05,
-both `engine` and `browser` jobs green). **That run covers the initial commit only.** The `dev`
-branch has not triggered CI yet, and the working-copy edits that add `dev` to the workflow's push
-trigger are themselves uncommitted. No release, no Pages deployment and no "verified" claim follows
-from a green run alone — publishing remains an explicit act. Gate 1's engine decision was never a
-release decision.
+both `engine` and `browser` jobs green). Subsequent runs are also green: the `dev`-gating and Q6
+changes on PR #1 (runs `41981780325`, `41986150317`), and the first `push` to `dev` after that PR was
+merged at `f07a096` (run `41987481649`). No release, no Pages deployment and no "verified" claim
+follows from a green run alone — publishing remains an explicit act. Gate 1's engine decision was
+never a release decision.
 
 ### Added
 
@@ -82,6 +82,34 @@ release decision.
   `docs/gate1-report.md`, `docs/w4-verification.md`, `docs/review-v1-grill.md`, `SECURITY.md`,
   `CONTRIBUTING.md`, and `docs/notes/atlas-0.4.0-api.md`.
 
+### Changed — one public entry point (2026-11-05)
+
+Decision F asked for a narrower public surface; §7 recorded roughly 55 of 60 Core files exposing a
+public type. The boundary was determined by the compiler, not by guesswork: 41 candidate types never
+named outside Core were made `internal`, and every type the compiler rejected (CS0050/51/53/60,
+because a public signature references it) was restored. Three iterations converged.
+
+- 27 types are now internal: `ScenarioEngine`, `LintEngine`, the eight lint rule implementations,
+  `ScenarioEvaluation`/`JobScenarioResult`, `ConditionEvaluator`, `ExpressionFunctions`, expression
+  node subtypes, `EvaluationScope` and friends.
+- 15 stay public because they *are* the contract: `ExpressionNode`, `ILintRule`, the lint result
+  types, `MatrixCombination`/`MatrixRun`, `JobGraphEdge`/`JobGraphAnalysisResult`, `StepDefinition`,
+  `DefaultsSection`, `ConcurrencySection`, `WorkflowInput`, `TemplateSegment`.
+- `PublicSurfaceTests` (11 assertions) pins the boundary against a future "just make it public" edit;
+  the compiler already enforces the opposite direction.
+
+This also fixed a real defect §7 had only flagged by inspection. `ScenarioEngine.Run` took the
+workflow and the job graph as two independent arguments and indexed `_jobs[jobId]` directly, so a
+caller supplying a graph built from a different document got a raw `KeyNotFoundException`. Making the
+engine internal removes that path for external callers; inside, `ScenarioRunner` now filters ids it
+cannot place and emits an `INT001` diagnostic per unknown id instead of throwing or inventing a
+result. `ScenarioEngineMismatchTests` reproduces the mismatch and an A/B check confirms it fails
+again when the guard is removed.
+
+Splitting the long files (`WorkflowModelBuilder`, `TriggerEvaluator`, `ExpressionBodyParser`,
+`AnalysisReportJson`) is mechanical and remains for a later batch. Pages deployment and the first
+release are still explicit, unperformed acts.
+
 ### Changed — Q6 second batch: shared conversions and CI currency (2026-11-05)
 
 Gate 2 went green in CI, unlocking the post-gate structural work (decision F). Reviewing the code
@@ -89,6 +117,9 @@ corrected two claims in `docs/review-v1-grill.md` §7: there are **two** Levensh
 (the third is a positional hint heuristic with different behaviour), and **two** JSON→value copies, not
 three (the third converts YAML, which needs scalar resolution and source positions).
 
+- `Text/EditDistance.cs` and `Values/JsonValueConverter.cs` are `internal`, not `public`: they were
+  introduced as public by mistake, widening the surface decision F asks to narrow. A
+  `SharedHelpers_AreNotPartOfThePublicApi` assertion guards against a regression.
 - `Text/EditDistance.cs` now owns `LevenshteinIgnoreCase`; `JobGraphAnalyzer` and `RunnerLabelTypoRule`
   call it instead of carrying their own copies. The `WorkflowModelBuilder` heuristic stays separate,
   with a comment explaining why sharing it would change the suggestion a reader sees.
