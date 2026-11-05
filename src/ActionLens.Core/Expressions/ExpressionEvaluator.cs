@@ -544,7 +544,7 @@ public sealed class ExpressionEvaluator
         try
         {
             using var document = System.Text.Json.JsonDocument.Parse(text);
-            return Evaluated.Known(JsonConverter.ToValue(document.RootElement));
+            return Evaluated.Known(JsonValueConverter.ToValue(document.RootElement));
         }
         catch (System.Text.Json.JsonException ex)
         {
@@ -658,33 +658,6 @@ public sealed class ExpressionEvaluator
                 UnknownReasonKind.InvalidSyntax,
                 $"'{node.Name}()' was called with the wrong number of arguments.",
                 node.Range));
-    }
-
-    /// <summary>Turns a parsed JSON document into a workflow value, for <c>fromJSON()</c>.</summary>
-    private static class JsonConverter
-    {
-        internal static GitHubValue ToValue(System.Text.Json.JsonElement element) => element.ValueKind switch
-        {
-            System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined => GitHubValue.Null,
-            System.Text.Json.JsonValueKind.True => GitHubValue.True,
-            System.Text.Json.JsonValueKind.False => GitHubValue.False,
-            System.Text.Json.JsonValueKind.String => GitHubValue.FromString(element.GetString() ?? string.Empty),
-            System.Text.Json.JsonValueKind.Number => GitHubValue.FromNumber(element.GetDouble()),
-            System.Text.Json.JsonValueKind.Array => GitHubValue.FromArray(
-                element.EnumerateArray().Select(ToValue).ToArray()),
-            _ => ToObject(element),
-        };
-
-        private static GitHubValue ToObject(System.Text.Json.JsonElement element)
-        {
-            var values = new Dictionary<string, GitHubValue>(StringComparer.Ordinal);
-            foreach (var property in element.EnumerateObject())
-            {
-                values[property.Name] = ToValue(property.Value);
-            }
-
-            return GitHubValue.FromObject(values);
-        }
     }
 
     /// <summary>Renders a value as the JSON text that <c>toJSON()</c> returns: two-space indentation.</summary>

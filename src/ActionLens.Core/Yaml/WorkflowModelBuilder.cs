@@ -1408,6 +1408,10 @@ internal sealed class WorkflowModelBuilder
             ? null
             : $"Did you mean '{best}'?";
 
+        // Not Levenshtein, and deliberately not shared with the other two "did you mean" helpers:
+        // this scores a field-name hint by length difference plus positional mismatches, while the
+        // graph and lint rules use an edit distance with their own budgets. Replacing either with the
+        // other would change which suggestion (if any) a reader is shown.
         static int Distance(string left, string right) =>
             Math.Abs(left.Length - right.Length) + left.Zip(right).Count(pair => pair.First != pair.Second);
     }

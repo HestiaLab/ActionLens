@@ -1,3 +1,5 @@
+using ActionLens.Core.Text;
+
 namespace ActionLens.Core.Linting.Rules;
 
 /// <summary>
@@ -102,7 +104,7 @@ public sealed class RunnerLabelTypoRule : ILintRule
 
         foreach (var hosted in HostedLabels)
         {
-            var distance = Distance(label, hosted);
+            var distance = EditDistance.LevenshteinIgnoreCase(label, hosted);
             if (distance > TypoBudget)
             {
                 continue;
@@ -121,34 +123,5 @@ public sealed class RunnerLabelTypoRule : ILintRule
         }
 
         return tied ? null : intended;
-    }
-
-    private static int Distance(string left, string right)
-    {
-        // Case-insensitive: a capitalisation slip is the friendliest typo to catch, and the message still
-        // quotes the label with the spelling the author used.
-        var a = left.ToLowerInvariant();
-        var b = right.ToLowerInvariant();
-        var previous = new int[b.Length + 1];
-        var current = new int[b.Length + 1];
-
-        for (var index = 0; index <= b.Length; index++)
-        {
-            previous[index] = index;
-        }
-
-        for (var i = 1; i <= a.Length; i++)
-        {
-            current[0] = i;
-            for (var j = 1; j <= b.Length; j++)
-            {
-                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
-                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
-            }
-
-            (previous, current) = (current, previous);
-        }
-
-        return previous[b.Length];
     }
 }
