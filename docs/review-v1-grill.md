@@ -446,23 +446,20 @@ Ui 24 → 25（`WorkspaceRenderTests`）；Playwright 6 → 8（DOM 身份保护
 **当时未执行**：`.github/workflows/gate2.yml` 在真实 GitHub Actions 上跑一次、Pages 部署，
 以及 Q6 第二批结构重构。按 Q5/F 的裁决，这些都不应在本地伪造为已完成。
 
-> **状态更新（2026-11-05 14:20）**：初始提交 `2363021` 已创建并推送到
-> `HestiaLab/ActionLens`，远端已有 `main` 与 `dev` 两个分支；本地已切到 `dev` 并跟踪
-> `origin/dev`，后续提交落到 `dev`。
-> **Gate 2 首次真实 CI 运行已通过**：`gate2` workflow run
-> [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618)，
-> `push` / `main` / `2363021` / conclusion `success`，`engine` 与 `browser` 两个 job 均绿
-> （2026-11-05 05:55 UTC，耗时 2m56s）。这把 §12「尚待在真实 CI 上跑一次」与 §15 的原待办
-> 推到了「已执行」，Q5/F 裁决里以 Gate 2 绿灯为前置条件的事项（Pages 部署、Q6 第二批结构重构）
-> 现在解锁，但**都还没有执行**。
-> **流程更新（2026-11-05 14:36）**：`dev` 已设置保护规则，不能直接 push。改为从 `dev` 开
-> 特性分支、推送后开 PR（base `dev`），由维护者合并；`dev` → `main` 另开一次评审 PR。
-> 相应的 PR 与合并分别触发一次 gate2，文档已同步到 `CONTRIBUTING.md` / `README.md`。
-> **精度边界**：该 run 跑的是初始提交，当时的 workflow 触发条件是 `[main]`、注释仍写 six criteria。
-> 本地 7 个未提交改动（把触发改为 `[main, dev]`、把注释改为 seven criteria、以及仓库状态文档对账）
-> 尚未提交、未推送、未经过 CI；`dev` 分支本身也从未触发过 workflow。因此不能把它读作
-> 「`dev` 已验证」或「当前工作区已验证」。
-> **仍待执行**：把这些改动提交到 `dev` 并让 `dev` 首次跑绿、Pages 部署、Q6 第二批结构重构。
+> **状态更新（2026-11-05 15:30，合并后复核）**：PR #1 已 `MERGED`（squash 为 `f07a096`），
+> 特性分支已从远端删除；`main` 仍在 `2363021`。`dev` 受保护，后续改动从 `dev` 开特性分支、
+> 开 PR（base `dev`）由维护者合并；`dev` → `main` 另开评审 PR。
+> **Gate 2 的全部真实 CI 运行均为 `success`**：
+> - `41977057618` — `push` / `main` / `2363021`（首次，2m56s）
+> - `41981780325`、`41986150317` — `pull_request` / PR #1 的两个提交（含改后 workflow）
+> - `41987481649` — `push` / `dev` / `f07a096`（`dev` 分支首次，两 job 均绿）
+>
+> 因此上一版写的「精度边界」（改动尚未提交/推送/经过 CI、`dev` 从未触发 workflow）已全部解除：
+> 改后的 workflow（触发 `[main, dev]`、seven criteria 注释、v5/v6 actions、`ubuntu-24.04`）
+> 已在 PR 与 `dev` push 两种事件下跑绿。Q5/F 里以 Gate 2 绿灯为前置的 Pages 部署与 Q6
+> 第二批结构重构已解锁；后者已由 §16 完成去重与 CI 技术债部分。
+> **仍待执行**：`dev` → `main` 评审 PR、Pages 首次部署与首个 release、§16 明确留下的
+> 「收窄 public 面 / 拆超长文件」，以及 ADR 0003 Deferred 的产品功能（Q2 已否决，须重开 ADR）。
 
 ---
 
@@ -489,7 +486,9 @@ Gate 2 在真实 CI 绿灯后，按 F 裁决解锁的「收窄 public 面 + 抽�
 - `tests/ActionLens.Core.Tests/Values/SharedConvertersTests.cs`：编辑距离（含对称性、大小写）、
   JSON 各类型映射、`ReadObject` 跳过键与 `TryWrap` 拒绝 null，共 7 条断言。
 - **收窄 public 面 / 拆超长文件仍未做**：那会改变约 55 个 public 类型的可见性并牵动大量测试，
-  属于独立的 API 决策，不在这一批。
+  属于独立的 API 决策，不在这一批。但本批新增的两个共享类最初误写成 `public`，等于反向扩大了
+  public 面；合并后已改回 `internal`（`InternalsVisibleTo` 已配置，测试不受影响），并加
+  `SharedHelpers_AreNotPartOfThePublicApi` 护栏断言防止回退。
 
 CI 技术债（上轮两条 annotation）：
 - `runner` 固定为 `ubuntu-24.04`，避免 `ubuntu-latest` 迁移到 Ubuntu 26 时静默改变 Chromium 系统依赖。

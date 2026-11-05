@@ -36,11 +36,11 @@ Gate 2 is all of the following, run locally first and then in `.github/workflows
 
 All seven held in the first real CI run: `gate2` on `main` at `2363021`
 (run [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618), 2026-11-05,
-both `engine` and `browser` jobs green). **That run covers the initial commit only.** The `dev`
-branch has not triggered CI yet, and the working-copy edits that add `dev` to the workflow's push
-trigger are themselves uncommitted. No release, no Pages deployment and no "verified" claim follows
-from a green run alone — publishing remains an explicit act. Gate 1's engine decision was never a
-release decision.
+both `engine` and `browser` jobs green). Subsequent runs are also green: the `dev`-gating and Q6
+changes on PR #1 (runs `41981780325`, `41986150317`), and the first `push` to `dev` after that PR was
+merged at `f07a096` (run `41987481649`). No release, no Pages deployment and no "verified" claim
+follows from a green run alone — publishing remains an explicit act. Gate 1's engine decision was
+never a release decision.
 
 ### Added
 
@@ -89,6 +89,9 @@ corrected two claims in `docs/review-v1-grill.md` §7: there are **two** Levensh
 (the third is a positional hint heuristic with different behaviour), and **two** JSON→value copies, not
 three (the third converts YAML, which needs scalar resolution and source positions).
 
+- `Text/EditDistance.cs` and `Values/JsonValueConverter.cs` are `internal`, not `public`: they were
+  introduced as public by mistake, widening the surface decision F asks to narrow. A
+  `SharedHelpers_AreNotPartOfThePublicApi` assertion guards against a regression.
 - `Text/EditDistance.cs` now owns `LevenshteinIgnoreCase`; `JobGraphAnalyzer` and `RunnerLabelTypoRule`
   call it instead of carrying their own copies. The `WorkflowModelBuilder` heuristic stays separate,
   with a comment explaining why sharing it would change the suggestion a reader sees.

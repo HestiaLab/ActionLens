@@ -103,6 +103,7 @@ table of [ADR 0003](adr/0003-local-first-no-backend.md), not shipped features. T
 **jobs, not job instances** and says so on screen; the instance count is reported separately.
 
 No package, container image or hosted Pages deployment has been published. The source repository is
-live at `HestiaLab/ActionLens`. Gate 2 (`CHANGELOG.md`) first went green in real CI on `main` at
-`2363021` (run `41977057618`); pushes to both `dev` and `main` are wired to `.github/workflows/gate2.yml`,
-but the `dev` branch has not had a run yet. Publishing remains an explicit act.
+live at `HestiaLab/ActionLens`. Gate 2 (`CHANGELOG.md`) is green in real CI on both branches: first on
+`main` at `2363021` (run `41977057618`), then on `dev` at `f07a096` after PR #1 was merged (run
+`41987481649`). Pushes to `dev` and `main` both run `.github/workflows/gate2.yml`. Publishing remains
+an explicit act.

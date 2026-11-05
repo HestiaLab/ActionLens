@@ -12,7 +12,7 @@ namespace ActionLens.Core.Values;
 /// rules (plain scalars become numbers/booleans/null) and needs the source text and position, which a
 /// <see cref="JsonElement"/> does not carry.
 /// </remarks>
-public static class JsonValueConverter
+internal static class JsonValueConverter
 {
     /// <summary>Turns any JSON element into the workflow value its type implies.</summary>
     public static GitHubValue ToValue(JsonElement element) => element.ValueKind switch
