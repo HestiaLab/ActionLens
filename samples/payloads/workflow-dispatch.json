@@ -1,0 +1,7 @@
+{
+  "event_name": "workflow_dispatch",
+  "ref": "refs/heads/main",
+  "repository": { "full_name": "HestiaLab/ActionLens", "default_branch": "main" },
+  "sender": { "login": "release-manager" },
+  "inputs": { "environment": "production", "dry-run": false }
+}

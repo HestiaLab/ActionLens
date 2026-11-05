@@ -1,0 +1,6 @@
+{
+  "event_name": "schedule",
+  "repository": { "full_name": "HestiaLab/ActionLens", "default_branch": "main" },
+  "ref": "refs/heads/main",
+  "cron": "0 0 * * *"
+}

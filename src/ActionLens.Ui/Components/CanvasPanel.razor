@@ -1,0 +1,222 @@
+@namespace ActionLens.Ui.Components
+@implements IDisposable
+@using ActionLens.Ui.Services
+@using ActionLens.Core.Reporting
+@using ActionLens.Core.Scenarios
+
+<section class="al-panel al-canvas" role="region" aria-label="Job graph">
+    <header class="al-panel-header">
+        <h2 class="al-panel-title">Job graph</h2>
+        <span class="al-panel-count" aria-hidden="true">@counts</span>
+    </header>
+
+    @if (Session.Report is not { } report)
+    {
+        <p class="al-empty" role="status">Waiting for the first analysis.</p>
+    }
+    else
+    {
+        <p id="al-graph-hint" class="al-hint">
+            <strong>This canvas draws jobs, not job instances:</strong> one box per job, so a matrix job
+            stands for every combination it expands to and says how many on the box.
+            Reach a box with <kbd>Tab</kbd>, move between boxes with the arrow keys, and press
+            <kbd>Enter</kbd> or <kbd>Space</kbd> to select it for the inspector.
+        </p>
+
+        @if (report.IsBlocked)
+        {
+            <p class="al-banner al-banner--blocked" role="alert">
+                <strong>Blocked.</strong> An error-severity finding means the model behind this drawing is
+                incomplete — @report.Totals.Errors error(s) and @report.Totals.Criticals critical(s) in the
+                diagnostics. @if (report.Graph.JobCount == 0)
+                {
+                    <text>Nothing could be placed, because no job list survived the read.</text>
+                }
+                else
+                {
+                    <text>The graph below is drawn from what did survive.</text>
+                }
+            </p>
+        }
+
+        <ul class="al-legend" role="list" aria-label="How the states are drawn">
+            <li>
+                <svg class="al-swatch" viewBox="0 0 34 22" width="34" height="22" aria-hidden="true" focusable="false">
+                    <g class="al-node--run">
+                        <rect class="al-node-shape" x="1.5" y="2.5" width="31" height="17" rx="4" />
+                        <circle class="al-glyph-shape" cx="10" cy="11" r="5" />
+                    </g>
+                </svg>
+                <span>@ReportPresentation.StateMarker(RunState.WillRun) @ReportPresentation.StateWord(RunState.WillRun) — square box, round glyph</span>
+            </li>
+            <li>
+                <svg class="al-swatch" viewBox="0 0 34 22" width="34" height="22" aria-hidden="true" focusable="false">
+                    <g class="al-node--skip">
+                        <polygon class="al-node-shape" points="8,3 26,3 31,8 31,14 26,19 8,19 3,14 3,8" />
+                        <rect class="al-glyph-shape" x="6" y="7" width="9" height="9" rx="1" />
+                    </g>
+                </svg>
+                <span>@ReportPresentation.StateMarker(RunState.WillNotRun) @ReportPresentation.StateWord(RunState.WillNotRun) — cut-corner box, square glyph</span>
+            </li>
+            <li>
+                <svg class="al-swatch" viewBox="0 0 34 22" width="34" height="22" aria-hidden="true" focusable="false">
+                    <g class="al-node--unknown">
+                        <rect class="al-node-shape" x="1.5" y="2.5" width="31" height="17" rx="9" />
+                        <polygon class="al-glyph-shape" points="10,5 15,15 5,15" />
+                    </g>
+                </svg>
+                <span>@ReportPresentation.StateMarker(RunState.Unknown) @ReportPresentation.StateWord(RunState.Unknown) — dashed pill, triangle glyph</span>
+            </li>
+            @if (report.Graph.Cycles.Count > 0)
+            {
+                <li>
+                    <svg class="al-swatch" viewBox="0 0 34 22" width="34" height="22" aria-hidden="true" focusable="false">
+                        <g class="al-node--cycle">
+                            <polygon class="al-node-shape" points="2,3 26,3 32,11 26,19 2,19" />
+                            <polygon class="al-glyph-shape" points="11,5 16,11 11,17 6,11" />
+                        </g>
+                    </svg>
+                    <span>↻ inside a cycle — pennant, and no position in the schedule</span>
+                </li>
+            }
+            @if (report.Graph.UnplacedJobs.Any(job => report.Graph.Cycles.All(cycle => !cycle.Contains(job, StringComparer.Ordinal))))
+            {
+                <li>
+                    <svg class="al-swatch" viewBox="0 0 34 22" width="34" height="22" aria-hidden="true" focusable="false">
+                        <g class="al-node--blocked">
+                            <polygon class="al-node-shape" points="9,3 32,3 32,19 9,19 2,11" />
+                            <polygon class="al-glyph-shape" points="13,6 18,11 13,16 8,11" />
+                        </g>
+                    </svg>
+                    <span>! blocked behind a cycle — tag shape, drawn in the lane under the grid</span>
+                </li>
+            }
+        </ul>
+
+        <div class="al-canvas-scroll">
+            @if (report.Graph.JobCount == 0 && report.Jobs.Count == 0)
+            {
+                <div class="al-canvas-placeholder" role="note">
+                    @if (report.IsBlocked)
+                    {
+                        <p>
+                            <strong>No graph to draw.</strong> The workflow did not survive the read, so the
+                            engine has no job list to lay out. The reason is in the diagnostics panel, and the
+                            inspector says the same.
+                        </p>
+                    }
+                    else
+                    {
+                        <p>
+                            <strong>Nothing to draw.</strong> This file declares no <code>jobs:</code>, so there
+                            are no boxes and no arrows. That is a complete answer, not a missing one.
+                        </p>
+                    }
+                </div>
+            }
+            else if (report.Graph.Nodes.Count == 0)
+            {
+                <div class="al-canvas-placeholder" role="note">
+                    <p>
+                        <strong>No job could be placed.</strong> @report.Graph.UnplacedJobs.Count job(s) are all
+                        inside or behind a cycle, so the layout gives none of them a column. They are drawn in
+                        the lane under the grid, with the cycle path that blocks them.
+                    </p>
+                </div>
+                <GraphCanvas Report="@report" />
+            }
+            else
+            {
+                <GraphCanvas Report="@report" />
+            }
+        </div>
+
+        <dl class="al-graph-facts">
+            <div><dt>Jobs</dt><dd>@report.Graph.JobCount</dd></div>
+            <div><dt>Placed</dt><dd>@report.Graph.Nodes.Count</dd></div>
+            <div><dt>Edges</dt><dd>@report.Graph.EdgeCount</dd></div>
+            <div><dt>Layers</dt><dd>@report.Graph.LayerCount</dd></div>
+            <div><dt>Widest layer</dt><dd>@report.Graph.MaxLayerWidth</dd></div>
+            <div><dt>Instances</dt><dd>@instances</dd></div>
+            <div>
+                <dt>Acyclic</dt>
+                <dd class="@(report.Graph.IsAcyclic ? "al-yes" : "al-no")">@(report.Graph.IsAcyclic ? "yes" : "no")</dd>
+            </div>
+            @if (report.Graph.Cycles.Count > 0)
+            {
+                <div>
+                    <dt>Cycles</dt>
+                    <dd>
+                        <ul role="list" class="al-cycle-list">
+                            @foreach (IReadOnlyList<string> cycle in report.Graph.Cycles)
+                            {
+                                <li>@string.Join(" → ", cycle)</li>
+                            }
+                        </ul>
+                    </dd>
+                </div>
+            }
+            @if (report.Graph.UnplacedJobs.Count > 0)
+            {
+                <div>
+                    <dt>Not placed</dt>
+                    <dd>@string.Join(", ", report.Graph.UnplacedJobs)</dd>
+                </div>
+            }
+        </dl>
+
+        @if (Session.SelectedJobId is { Length: > 0 } selected)
+        {
+            <p class="al-graph-selection" role="status">
+                Selected: <code>@selected</code>
+                @if (report.Jobs.FirstOrDefault(job => string.Equals(job.JobId, selected, StringComparison.Ordinal)) is { } job)
+                {
+                    <text> — @ReportPresentation.StateChip(job.State), @ReportPresentation.InstanceSummary(job.Matrix)</text>
+                }
+                <button type="button" class="al-jump" @onclick="ClearSelection"
+                        aria-label="@($"Clear the selection of {selected}")">clear</button>
+            </p>
+        }
+    }
+</section>
+
+@code {
+    [Inject]
+    private AnalysisSession Session { get; set; } = default!;
+
+    private string counts
+    {
+        get
+        {
+            if (Session.Report is not { } report)
+            {
+                return string.Empty;
+            }
+
+            return $"jobs {report.Graph.JobCount} · edges {report.Graph.EdgeCount} · layers {report.Graph.LayerCount} · acyclic {(report.Graph.IsAcyclic ? "yes" : "no")}";
+        }
+    }
+
+    private string instances
+    {
+        get
+        {
+            if (Session.Report is not { } report)
+            {
+                return string.Empty;
+            }
+
+            return report.Totals.JobInstances is { } total
+                ? total.ToString()
+                : "unknown until the matrix expands";
+        }
+    }
+
+    protected override void OnInitialized() => Session.Changed += OnChanged;
+
+    public void Dispose() => Session.Changed -= OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void ClearSelection() => Session.SelectJob(null);
+}

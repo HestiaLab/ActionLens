@@ -1,0 +1,27 @@
+## .NET build output
+bin/
+obj/
+*.user
+*.suo
+.vs/
+publish/
+artifacts/
+
+## Test output
+TestResults/
+*.trx
+*.coverage
+coverage*.xml
+coverage*.json
+test-results/
+playwright-report/
+
+## Blazor WASM / Node
+node_modules/
+src/ActionLens.App/wwwroot/js/dist/
+
+## Editor / local tool metadata
+.idea/
+.qoder-credits/
+*.swp
+.DS_Store

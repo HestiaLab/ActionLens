@@ -1,0 +1,31 @@
+@namespace ActionLens.Ui.Components
+@implements IAsyncDisposable
+
+@if (Surface == EditorSurface.TextareaFallback)
+{
+    <div class="al-editor al-editor--fallback">
+        <textarea class="al-editor-textarea"
+                  @key="@_replaceToken"
+                  rows="24"
+                  wrap="soft"
+                  spellcheck="false"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  aria-label="@AriaLabel"
+                  value="@_text"
+                  @oninput="OnFallbackInput"></textarea>
+        <p class="al-editor-warning" role="note">
+            <strong>Degraded editor.</strong> The CodeMirror bundle did not load, so ActionLens is showing a
+            plain text area. Analysis still runs on what you type; clicking a finding cannot move the caret
+            in this mode.
+        </p>
+    </div>
+}
+else
+{
+    <div class="al-editor @(Surface == EditorSurface.Loading ? "al-editor--loading" : null)"
+         @ref="_host"
+         role="group"
+         aria-label="@AriaLabel"
+         aria-busy="@(Surface == EditorSurface.Loading ? "true" : "false")"></div>
+}

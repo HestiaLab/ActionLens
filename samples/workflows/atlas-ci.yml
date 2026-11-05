@@ -1,0 +1,117 @@
+# -----------------------------------------------------------------------------
+# atlas-ci.yml — REAL workflow, copied verbatim (this comment block excepted).
+#
+# Source: https://github.com/HestiaLab/Atlas/blob/main/.github/workflows/ci.yml
+# Copied from the local READ-ONLY checkout at
+# C:\Users\World\source\repos\Atlas — branch main, HEAD commit
+# f2def23d3e206f5ceff01dec49042862a435568e; this file was last modified by
+# commit ea1e6b58af121a8a85cbbcbebc9229d6c3f1fe20 (2026-10-30). Retrieval date:
+# 2026-11-04. Selected as ActionLens's dogfooding target: it is the richest of
+# Atlas's four workflows (ci.yml, deploy-demo.yml, publish-github-packages.yml,
+# add-to-project.yml).
+#
+# Analysis features exercised: build/format/pack job graph with a two-OS
+# `strategy.matrix` (`os: [ubuntu-latest, windows-latest]`) driving
+# `runs-on: ${{ matrix.os }}`; `workflow_dispatch` alongside push/pull_request
+# triggers; a step-level `if: always()` status function guarding the coverage
+# upload; matrix interpolation inside action inputs (`name: coverage-${{
+# matrix.os }}`); tag-pinned remote actions with no SHA pin
+# (actions/checkout@v7, actions/setup-dotnet@v6, actions/setup-node@v7,
+# actions/upload-artifact@v4) and no local `uses:`; multi-line `run: |` scripts
+# and `working-directory`. Honest gaps: this file has NO `needs:`, NO matrix
+# `include:`/`exclude:`, NO `secrets.` usage, and NO `workflow_dispatch`
+# inputs — in fact none of Atlas's workflows uses `needs:` at all (dispatch
+# inputs exist only in publish-github-packages.yml).
+# -----------------------------------------------------------------------------
+name: CI
+
+on:
+  push:
+    branches: [main, master, 'feature/**', 'feat/**', 'fix/**', 'refactor/**', 'infra/**']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Atlas.Blazor/package-lock.json
+
+      - name: Restore
+        run: dotnet restore Atlas.sln
+
+      - name: Atlas 2 TypeScript
+        working-directory: src/Atlas.Blazor
+        run: |
+          npm ci
+          npm run typecheck
+          npm run test:js
+          npm run build:js
+
+      - name: Build
+        run: dotnet build Atlas.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test Atlas.sln --no-build --no-restore --configuration Release -- --coverage --coverage-output-format cobertura
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: TestResults/**/*.cobertura.xml
+          if-no-files-found: warn
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore Atlas.sln
+      - run: dotnet format Atlas.sln --verify-no-changes --no-restore --verbosity minimal
+
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Atlas.Blazor/package-lock.json
+      - run: dotnet restore Atlas.sln
+      - run: npm ci
+        working-directory: src/Atlas.Blazor
+      - run: npm run build:js
+        working-directory: src/Atlas.Blazor
+      # Single-package distribution (ADR-0019): only Atlas.Blazor is packed;
+      # it embeds Atlas.Core.dll. The version is pinned to match the
+      # published release so consumers (e.g. the DbcView sample application)
+      # resolve the exact package Atlas ships.
+      - run: dotnet pack src/Atlas.Blazor/Atlas.Blazor.csproj --no-restore --configuration Release --output artifacts/packages -p:PackageVersion=0.4.0

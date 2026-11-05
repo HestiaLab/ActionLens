@@ -1,0 +1,37 @@
+@namespace ActionLens.Ui.Components
+@using ActionLens.Core.Expressions
+
+<li class="al-reason">
+    <span class="al-reason-kind">@Label(Reason.Kind)</span>
+    <span class="al-reason-message">@Reason.Message</span>
+    @if (Reason.Range.IsKnown)
+    {
+        <span class="al-reason-range">line @Reason.Range.Start.Line</span>
+    }
+</li>
+@if (Reason.Causes.Count > 0)
+{
+    <ul class="al-reason-list" role="list" aria-label="Why this is unknown">
+        @foreach (UnknownReason cause in Reason.Causes)
+        {
+            <UnknownReasonTree Reason="cause" />
+        }
+    </ul>
+}
+
+@code {
+    /// <summary>The reason node to render, and its causes underneath it.</summary>
+    [Parameter, EditorRequired]
+    public UnknownReason Reason { get; set; } = default!;
+
+    private static string Label(UnknownReasonKind kind) => kind switch
+    {
+        UnknownReasonKind.RuntimeContext => "only a run can say",
+        UnknownReasonKind.ValueMissing => "not supplied",
+        UnknownReasonKind.ContextNotAvailable => "not available here",
+        UnknownReasonKind.RuntimeFunction => "reads the filesystem",
+        UnknownReasonKind.ScenarioDependent => "depends on the scenario",
+        UnknownReasonKind.Propagated => "carried from an unknown operand",
+        _ => "cannot be parsed",
+    };
+}

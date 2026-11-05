@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Component regression tests. This is the layer docs/w4-verification.md proved untestable from the
+    engine suite: crashed boot from an empty embed glob, three <select> bindings that changed the DOM
+    but not app state, a scenario label that lied, and canvas behaviour nobody could assert.
+    Runner note: bUnit 2.x has no dependency on xunit, so these tests use xunit.v3 directly and build a
+    BunitContext per test (see Supporting/ComponentHarness.cs) rather than the preview-only bunit.xunit
+    glue. The JS bundle cannot load under bUnit, so the harness substitutes the IEditorModule seam and
+    exercises the documented textarea-fallback path.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- xUnit v3 runs on Microsoft.Testing.Platform; the .NET 10 SDK only supports VSTest
+         through this opt-in, so 'dotnet test' needs it. -->
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ActionLens.Ui.Tests</RootNamespace>
+    <AssemblyName>ActionLens.Ui.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="bunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ActionLens.Ui\ActionLens.Ui.csproj" />
+  </ItemGroup>
+
+</Project>

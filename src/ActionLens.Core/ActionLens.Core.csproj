@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActionLens.Core</RootNamespace>
+    <AssemblyName>ActionLens.Core</AssemblyName>
+    <Description>ActionLens analysis engine: YAML parsing, GitHub Actions expression evaluation, matrix expansion, job graph and linting. Pure C#, no Blazor or JS dependency.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ActionLens.Core.Tests" />
+  </ItemGroup>
+
+</Project>

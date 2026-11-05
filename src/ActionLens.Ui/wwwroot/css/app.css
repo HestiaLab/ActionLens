@@ -1,0 +1,1027 @@
+/* ---------------------------------------------------------------------------
+   ActionLens app styles.
+
+   Load order in index.html is atlas.css → themes/ide.css → this file, so these
+   rules win over Atlas chrome (docs/notes/atlas-0.4.0-api.md §1.1). Atlas themes
+   its own chrome only; panel content, the top bar and the status strip are ours.
+   --------------------------------------------------------------------------- */
+
+:root {
+    /* Palette. The editor reads these; the three-state badges read the ones below. */
+    --al-editor-bg: canvas;
+    --al-editor-text: canvastext;
+    --al-editor-gutter-bg: color-mix(in srgb, canvastext 4%, canvas);
+    --al-editor-gutter-text: graytext;
+    --al-editor-border: color-mix(in srgb, canvastext 18%, transparent);
+    --al-editor-active-line: color-mix(in srgb, AccentColor 10%, transparent);
+    --al-editor-caret: AccentColor;
+    --al-editor-font: ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    --al-editor-reveal: color-mix(in srgb, Mark 45%, transparent);
+
+    --al-run: #1a7f37;
+    --al-run-bg: color-mix(in srgb, #1a7f37 14%, canvas);
+    --al-skip: #6b7280;
+    --al-skip-bg: color-mix(in srgb, #6b7280 14%, canvas);
+    --al-unknown: #8a5a00;
+    --al-unknown-bg: color-mix(in srgb, #f0b429 26%, canvas);
+    --al-critical: #b32121;
+    --al-error: #d1495b;
+    --al-warning: #9a6b00;
+    --al-info: #4a5568;
+    --al-gap: 0.5rem;
+}
+
+/* Full-height chain: Blazor renders inside #app, and the Atlas grid needs a height
+   or it collapses to content size. */
+html,
+body,
+#app,
+.al-shell,
+.al-shell > .atlas-v2-workspace {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.al-shell {
+    position: relative;
+    display: block;
+    background: var(--al-editor-bg);
+    color: var(--al-editor-text);
+}
+
+.al-shell-loading,
+.al-shell-error {
+    padding: 2rem;
+    max-width: 48rem;
+}
+
+.al-shell-error {
+    border: 1px solid var(--al-error);
+    margin: 2rem;
+    padding: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Top bar (app-owned markup inside Atlas' fixed slot).
+   --------------------------------------------------------------------------- */
+
+.al-topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    padding: 0.4rem 0.75rem;
+    background: var(--al-chrome-bg, color-mix(in srgb, canvastext 5%, canvas));
+    border-bottom: 1px solid var(--al-editor-border);
+}
+
+.al-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-weight: 600;
+}
+
+.al-brand-mark {
+    color: AccentColor;
+}
+
+.al-brand-name {
+    letter-spacing: 0.02em;
+}
+
+.al-brand-sub {
+    font-weight: 400;
+    font-size: 0.8rem;
+    color: graytext;
+}
+
+.al-topbar-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    margin-left: auto;
+}
+
+.al-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-inline-size: 9rem;
+}
+
+.al-field > label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: graytext;
+}
+
+.al-field select,
+.al-field button {
+    font: inherit;
+    padding: 0.2rem 0.35rem;
+    background: Canvas;
+    color: CanvasText;
+    border: 1px solid var(--al-editor-border);
+    border-radius: 4px;
+}
+
+.al-field--planned button {
+    color: graytext;
+    font-size: 0.8rem;
+}
+
+.al-field select:disabled,
+.al-field button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   Panels. Atlas owns the frame and the tab strip; this styles the content we
+   render inside a tab.
+   --------------------------------------------------------------------------- */
+
+.al-panel {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-inline-size: 0;
+    padding: 0.5rem 0.6rem;
+    overflow: hidden;
+    background: var(--al-editor-bg);
+    color: var(--al-editor-text);
+    font-size: 0.86rem;
+}
+
+.al-panel-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
+
+.al-panel-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 650;
+}
+
+.al-panel-count {
+    font-size: 0.75rem;
+    color: graytext;
+}
+
+.al-hint {
+    margin: 0.35rem 0 0.5rem;
+    font-size: 0.75rem;
+    color: graytext;
+}
+
+.al-hint kbd {
+    font: inherit;
+    padding: 0 0.2em;
+    border: 1px solid var(--al-editor-border);
+    border-radius: 3px;
+}
+
+.al-empty {
+    color: graytext;
+    font-style: italic;
+}
+
+.al-subtitle {
+    margin: 0.75rem 0 0.25rem;
+    font-size: 0.85rem;
+}
+
+.al-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Editors.
+   --------------------------------------------------------------------------- */
+
+.al-editor {
+    block-size: 100%;
+    min-block-size: 0;
+    overflow: hidden;
+}
+
+.al-editor--loading {
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 1.45em,
+        color-mix(in srgb, canvastext 4%, transparent) 1.45em,
+        color-mix(in srgb, canvastext 4%, transparent) 1.5em);
+}
+
+.al-editor--fallback {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    block-size: 100%;
+}
+
+.al-editor-textarea {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    resize: none;
+    font-family: var(--al-editor-font);
+    font-size: 0.82rem;
+    line-height: 1.45;
+    padding: 0.35rem 0.5rem;
+    background: Canvas;
+    color: CanvasText;
+    border: 1px solid var(--al-editor-border);
+    border-radius: 4px;
+}
+
+.al-editor-warning {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.75rem;
+    background: var(--al-unknown-bg);
+    border-left: 3px solid var(--al-unknown);
+}
+
+/* ---------------------------------------------------------------------------
+   Diagnostics list.
+   --------------------------------------------------------------------------- */
+
+.al-diagnostic-list,
+.al-job-list {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow: auto;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.al-diagnostic-item {
+    margin: 0 0 0.25rem;
+}
+
+.al-diagnostic {
+    display: grid;
+    grid-template-columns: auto auto auto 1fr;
+    align-items: baseline;
+    gap: 0.15rem 0.5rem;
+    inline-size: 100%;
+    text-align: start;
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-inline-start: 3px solid var(--al-info);
+    border-radius: 4px;
+    padding: 0.3rem 0.4rem;
+    cursor: pointer;
+}
+
+.al-diagnostic:hover {
+    background: color-mix(in srgb, canvastext 6%, transparent);
+}
+
+.al-diagnostic .al-diagnostic-code,
+.al-diagnostic .al-diagnostic-severity,
+.al-diagnostic .al-diagnostic-position,
+.al-diagnostic .al-diagnostic-stage {
+    font-size: 0.72rem;
+    color: graytext;
+    white-space: nowrap;
+}
+
+.al-diagnostic .al-diagnostic-message {
+    grid-column: 1 / -1;
+    font-size: 0.84rem;
+}
+
+.al-diagnostic .al-diagnostic-suggestion {
+    grid-column: 1 / -1;
+    font-size: 0.76rem;
+    color: graytext;
+}
+
+.al-severity--critical {
+    border-inline-start-color: var(--al-critical);
+}
+
+.al-severity--error {
+    border-inline-start-color: var(--al-error);
+}
+
+.al-severity--warning {
+    border-inline-start-color: var(--al-warning);
+}
+
+.al-severity--info {
+    border-inline-start-color: var(--al-info);
+}
+
+.al-diagnostic--selected,
+.al-diagnostic[aria-current="true"] {
+    background: color-mix(in srgb, AccentColor 12%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+   Three-state badges. Colour is never the only signal: each badge carries a
+   marker glyph and its own words.
+   --------------------------------------------------------------------------- */
+
+.al-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 0.05em 0.4em;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid currentColor;
+}
+
+.al-state--run {
+    color: var(--al-run);
+    background: var(--al-run-bg);
+}
+
+.al-state--skip {
+    color: var(--al-skip);
+    background: var(--al-skip-bg);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+
+.al-state--unknown {
+    color: var(--al-unknown);
+    background: var(--al-unknown-bg);
+    border-style: dashed;
+}
+
+.al-badge {
+    padding: 0.05em 0.4em;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    border: 1px dashed currentColor;
+}
+
+.al-badge--unfinished {
+    color: var(--al-unknown);
+}
+
+/* ---------------------------------------------------------------------------
+   Inspector.
+   --------------------------------------------------------------------------- */
+
+.al-job {
+    padding: 0.45rem 0.25rem;
+    border-bottom: 1px solid var(--al-editor-border);
+}
+
+.al-job--unknown {
+    border-inline-start: 3px solid var(--al-unknown);
+    padding-inline-start: 0.5rem;
+}
+
+.al-job-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4rem;
+}
+
+.al-job-id {
+    font-family: var(--al-editor-font);
+    font-weight: 600;
+}
+
+.al-job-outcome,
+.al-job-name,
+.al-job-needs,
+.al-job-matrix,
+.al-job-pin {
+    margin: 0.15rem 0 0;
+    font-size: 0.78rem;
+    color: graytext;
+}
+
+.al-job-condition {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.2rem 0 0;
+    font-size: 0.78rem;
+}
+
+.al-job-condition code {
+    font-family: var(--al-editor-font);
+    color: inherit;
+    word-break: break-word;
+}
+
+.al-implicit {
+    font-size: 0.72rem;
+    border-bottom: 1px dotted currentColor;
+}
+
+.al-jump {
+    font: inherit;
+    font-size: 0.72rem;
+    padding: 0 0.3em;
+    background: transparent;
+    color: AccentColor;
+    border: 1px solid var(--al-editor-border);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.al-need {
+    display: inline-block;
+    margin-inline-end: 0.4rem;
+    font-family: var(--al-editor-font);
+}
+
+.al-truncated {
+    color: var(--al-warning);
+}
+
+.al-unknown {
+    margin-top: 0.3rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.78rem;
+    background: var(--al-unknown-bg);
+    border-left: 3px solid var(--al-unknown);
+}
+
+.al-reason-list {
+    margin: 0.25rem 0 0;
+    padding-inline-start: 1rem;
+    list-style: none;
+}
+
+.al-reason {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-block-start: 0.15rem;
+}
+
+.al-reason-kind {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--al-unknown);
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    padding: 0 0.25em;
+}
+
+.al-reason-range {
+    font-size: 0.7rem;
+    color: graytext;
+}
+
+/* ---------------------------------------------------------------------------
+   Canvas placeholder and summary.
+   --------------------------------------------------------------------------- */
+
+.al-canvas-placeholder {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow: auto;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    border: 2px dashed var(--al-editor-border);
+    border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   The DAG canvas (W5).
+
+   A job's state is carried by its shape first and its colour second: a square box
+   with a round glyph runs, a cut-corner box with a square glyph does not, a dashed
+   pill with a triangle glyph is unknown. That is deliberate — the product promise
+   is that an unknown never reads as a definite answer, so greyscale print, a colour
+   vision deficiency, and a screen reader all have to get the same message. The
+   classes below only add colour and the non-focus decorations.
+   --------------------------------------------------------------------------- */
+
+.al-canvas-scroll {
+    flex: 0 0 auto;
+    min-block-size: 12rem;
+    overflow: auto;
+    margin-top: 0.5rem;
+}
+
+/* The canvas panel keeps its own scroll: a graph is taller than the panel Atlas gives it by default, and
+   clipping it to a strip would hide the very boxes the reader came to look at. */
+.al-panel.al-canvas {
+    overflow: auto;
+}
+
+.al-graph-svg {
+    display: block;
+}
+
+.al-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1rem;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.74rem;
+    color: graytext;
+}
+
+.al-legend li {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.al-swatch {
+    flex: none;
+}
+
+.al-graph-node {
+    cursor: pointer;
+    transition: filter 120ms ease;
+}
+
+.al-node-shape {
+    transition: stroke-width 120ms ease;
+}
+
+.al-graph-node:focus {
+    outline: none;
+}
+
+.al-graph-node:focus-visible .al-node-shape,
+.al-node--selected .al-node-shape {
+    stroke-width: 4;
+}
+
+.al-graph-node:focus-visible {
+    filter: drop-shadow(0 0 1.5px AccentColor);
+}
+
+.al-node-shape {
+    stroke-width: 2;
+}
+
+.al-node-glyph {
+    font-size: 13px;
+    font-weight: 700;
+    fill: canvas;
+    pointer-events: none;
+}
+
+.al-node-id {
+    font-family: var(--al-editor-font);
+    font-size: 12.5px;
+    font-weight: 600;
+    fill: canvastext;
+}
+
+.al-node-state {
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.al-node-detail {
+    font-size: 10px;
+    fill: graytext;
+}
+
+.al-node--run .al-node-shape {
+    fill: var(--al-run-bg);
+    stroke: var(--al-run);
+}
+
+.al-node--run .al-glyph-shape {
+    fill: var(--al-run);
+    stroke: none;
+}
+
+.al-node--run .al-node-state {
+    fill: var(--al-run);
+}
+
+.al-node--skip .al-node-shape {
+    fill: var(--al-skip-bg);
+    stroke: var(--al-skip);
+}
+
+.al-node--skip .al-glyph-shape {
+    fill: var(--al-skip);
+    stroke: none;
+}
+
+.al-node--skip .al-node-state {
+    fill: var(--al-skip);
+}
+
+.al-node--unknown .al-node-shape {
+    fill: var(--al-unknown-bg);
+    stroke: var(--al-unknown);
+    stroke-dasharray: 6 4;
+}
+
+.al-node--unknown .al-glyph-shape {
+    fill: none;
+    stroke: var(--al-unknown);
+    stroke-width: 2;
+}
+
+.al-node--unknown .al-node-glyph {
+    fill: var(--al-unknown);
+}
+
+.al-node--unknown .al-node-state {
+    fill: var(--al-unknown);
+}
+
+.al-node--cycle .al-node-shape {
+    fill: color-mix(in srgb, var(--al-error) 12%, canvas);
+    stroke: var(--al-error);
+    stroke-width: 2.5;
+    stroke-dasharray: 2 3;
+}
+
+.al-node--cycle .al-glyph-shape {
+    fill: var(--al-error);
+    stroke: none;
+}
+
+.al-node--cycle .al-node-state,
+.al-node--cycle .al-node-detail {
+    fill: var(--al-error);
+}
+
+.al-node--blocked .al-node-shape {
+    fill: color-mix(in srgb, var(--al-warning) 14%, canvas);
+    stroke: var(--al-warning);
+    stroke-dasharray: 9 3 2 3;
+}
+
+.al-node--blocked .al-glyph-shape {
+    fill: none;
+    stroke: var(--al-warning);
+    stroke-width: 2;
+}
+
+.al-node--blocked .al-node-glyph,
+.al-node--blocked .al-node-state,
+.al-node--blocked .al-node-detail {
+    fill: var(--al-warning);
+}
+
+.al-edge {
+    fill: none;
+    stroke: color-mix(in srgb, canvastext 45%, transparent);
+    stroke-width: 1.6;
+}
+
+.al-arrowhead {
+    fill: color-mix(in srgb, canvastext 45%, transparent);
+    stroke: none;
+}
+
+.al-arrowhead--open {
+    fill: none;
+    stroke: var(--al-warning);
+    stroke-width: 1.6;
+}
+
+.al-edge--cycle,
+.al-edge--loop {
+    stroke: var(--al-error);
+    stroke-width: 2.2;
+    stroke-dasharray: 5 4;
+}
+
+.al-arrowhead--cycle {
+    fill: var(--al-error);
+}
+
+.al-edge--dangling {
+    stroke: var(--al-warning);
+    stroke-dasharray: 3 3;
+}
+
+.al-band-rule {
+    stroke: var(--al-editor-border);
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+}
+
+.al-band-caption {
+    fill: graytext;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+}
+
+.al-graph-selection,
+.al-inspector-selection {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.4rem 0 0;
+    font-size: 0.78rem;
+    color: graytext;
+}
+
+.al-job--selected {
+    background: color-mix(in srgb, AccentColor 9%, canvas);
+    box-shadow: inset 3px 0 0 AccentColor;
+}
+
+.al-graph-facts,
+.al-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, max-content));
+    gap: 0.35rem 1rem;
+    margin: 0.75rem 0 0;
+}
+
+.al-graph-facts > div,
+.al-summary-grid > div {
+    display: flex;
+    flex-direction: column;
+}
+
+.al-graph-facts dt,
+.al-summary-grid dt {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: graytext;
+}
+
+.al-graph-facts dd,
+.al-summary-grid dd {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.al-cycle-list {
+    margin: 0;
+    padding-inline-start: 1rem;
+}
+
+.al-yes {
+    color: var(--al-run);
+}
+
+.al-no {
+    color: var(--al-error);
+    font-weight: 650;
+}
+
+.al-banner {
+    margin: 0.5rem 0;
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.al-banner--blocked {
+    background: color-mix(in srgb, var(--al-error) 16%, canvas);
+    border-left: 4px solid var(--al-error);
+}
+
+.al-verdict {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin: 0.25rem 0 0;
+    font-size: 0.82rem;
+}
+
+.al-verdict-reason {
+    color: graytext;
+    font-size: 0.78rem;
+}
+
+.al-filter-list {
+    margin: 0.4rem 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.78rem;
+}
+
+.al-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding: 0.1rem 0;
+}
+
+.al-filter-name {
+    font-family: var(--al-editor-font);
+}
+
+.al-filter-value,
+.al-filter-note {
+    color: graytext;
+}
+
+.al-action {
+    font: inherit;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--al-editor-border);
+    border-radius: 4px;
+    background: Canvas;
+    color: CanvasText;
+    cursor: pointer;
+}
+
+.al-host-error {
+    padding: 0.75rem;
+    color: var(--al-critical);
+    font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Status strip.
+   --------------------------------------------------------------------------- */
+
+.al-statusbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 1.25rem;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    background: var(--al-chrome-bg, color-mix(in srgb, canvastext 5%, canvas));
+    border-top: 1px solid var(--al-editor-border);
+}
+
+.al-status-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.al-status-revision {
+    margin-inline-start: auto;
+    color: graytext;
+}
+
+.al-dot {
+    display: inline-block;
+    inline-size: 0.6em;
+    color: var(--al-info);
+}
+
+.al-dot--pending {
+    color: var(--al-warning);
+}
+
+.al-dot--ready {
+    color: var(--al-run);
+}
+
+.al-dot--blocked {
+    color: var(--al-error);
+}
+
+.al-editor-ok {
+    color: var(--al-run);
+}
+
+.al-editor-warn {
+    color: var(--al-unknown);
+    font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   Focus visibility. Atlas handles its own ring; these cover the content we own.
+   --------------------------------------------------------------------------- */
+
+.al-panel :focus-visible,
+.al-topbar :focus-visible,
+.al-statusbar :focus-visible,
+.al-editor-textarea:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Reduced motion: honour the preference for everything ActionLens animates.
+   Atlas sets data-atlas-reduced-motion on its own root from the same media
+   feature, so nothing here needs to reach into its chrome.
+   --------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .al-diagnostic,
+    .al-jump,
+    .al-action,
+    .al-graph-node,
+    .al-node-shape,
+    .al-editor--loading {
+        transition: none;
+        animation: none;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Blazor's own template styles for the error UI and the load progress ring.
+   --------------------------------------------------------------------------- */
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+.blazor-error-boundary {
+    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZTh0PSI0OSIvPjwvZGVmcz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+}
+
+.blazor-error-boundary::after {
+    content: "An error has occurred."
+}
+
+.loading-progress {
+    position: absolute;
+    display: block;
+    width: 8rem;
+    height: 8rem;
+    inset: 20vh 0 auto 0;
+    margin: 0 auto 0 auto;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: #e0e0e0;
+    stroke-width: 0.6rem;
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+}
+
+.loading-progress circle:last-child {
+    stroke: #1b6ec2;
+    stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
+    transition: stroke-dasharray 0.05s ease-in-out;
+}
+
+.loading-progress-text {
+    position: absolute;
+    text-align: center;
+    font-weight: bold;
+    inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
+}
+
+.loading-progress-text:after {
+    content: var(--blazor-load-percentage-text, "Loading");
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loading-progress circle:last-child {
+        transition: none;
+    }
+}

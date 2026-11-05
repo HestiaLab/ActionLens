@@ -1,0 +1,80 @@
+@namespace ActionLens.Ui.Components
+@implements IDisposable
+@using ActionLens.Ui.Services
+
+<footer class="al-statusbar" role="status" aria-live="polite" aria-atomic="true">
+    <span class="al-status-cell">
+        @if (Session.IsPending)
+        {
+            <span class="al-dot al-dot--pending" aria-hidden="true">…</span>
+            <text>Analysing</text>
+        }
+        else if (Session.Report is { } report)
+        {
+            <span class="al-dot @(report.IsBlocked ? "al-dot--blocked" : "al-dot--ready")" aria-hidden="true">•</span>
+            <text>
+                @report.Jobs.Count job(s) · @report.Totals.Diagnostics finding(s) ·
+                @report.Totals.UnknownJobs unknown
+            </text>
+        }
+        else
+        {
+            <text>No analysis yet.</text>
+        }
+    </span>
+
+    <span class="al-status-cell">@Announcement</span>
+
+    <span class="al-status-cell @(Surfaces.IsFullyLoaded ? "al-editor-ok" : "al-editor-warn")">
+        @editorState
+    </span>
+
+    <span class="al-status-cell al-status-revision" title="Atlas workspace revision; every panel move, tab and resize is one undo step.">
+        layout r@(Revision)@(Session.LastEngineFailure is { Length: > 0 } failure ? $" · engine error: {failure}" : string.Empty)
+    </span>
+</footer>
+
+@code {
+    [Inject]
+    private AnalysisSession Session { get; set; } = default!;
+
+    [Inject]
+    private EditorSurfaceMonitor Surfaces { get; set; } = default!;
+
+    /// <summary>The workspace revision, supplied by the shell that owns the Atlas workspace.</summary>
+    [Parameter]
+    public long Revision { get; set; }
+
+    /// <summary>What the last interaction did, for the live region.</summary>
+    [Parameter]
+    public string? Announcement { get; set; }
+
+    private string editorState
+    {
+        get
+        {
+            if (Surfaces.FallbackCount > 0)
+            {
+                return $"editor: textarea fallback ({Surfaces.FallbackCount}) — {(Surfaces.LastFailure ?? "bundle unavailable")}";
+            }
+
+            return Surfaces.CodeMirrorCount > 0
+                ? $"editor: CodeMirror ({Surfaces.CodeMirrorCount})"
+                : "editor: not started";
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnChanged;
+        Surfaces.Changed += OnChanged;
+    }
+
+    public void Dispose()
+    {
+        Session.Changed -= OnChanged;
+        Surfaces.Changed -= OnChanged;
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+}

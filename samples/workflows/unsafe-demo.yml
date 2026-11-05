@@ -1,0 +1,142 @@
+# -----------------------------------------------------------------------------
+# unsafe-demo.yml — SYNTHESIZED BY THE ACTIONLENS TEAM. NOT A REAL-WORLD FILE.
+#
+# Written 2026-11-04. Unlike atlas-ci.yml and matrix-build.yml, nothing here
+# was copied from an upstream repository: every job is a deliberate composite of
+# the anti-patterns GitHub Actions maintainers warn about in their docs
+# (pull_request_target + head-ref checkout, script injection via event payload,
+# unpinned actions, secrets in `if:`, deprecated workflow commands). DO NOT use
+# this file as a template; DO NOT treat it as evidence of real-world usage.
+#
+# Rule coverage (finding cases):
+#   AL001 - `uses:` pinned to tag/branch, never a SHA: actions/checkout@v4,
+#           actions/setup-python@v5, actions/checkout@main, actions/checkout@v3.
+#   AL002 - `pr-target-repro` runs under `pull_request_target` and checks out
+#           github.event.pull_request.head.sha with write permissions.
+#   AL003 - `${{ github.event.pull_request.* }}` and `${{ github.head_ref }}`
+#           interpolated directly into `run:` scripts (script injection).
+#   AL004 - `secrets.*` referenced inside `if:` at both step level
+#           (matrix-build "Deploy preview") and job level ("deploy").
+#   AL005 - jobs WITH timeout-minutes (pr-target-repro, deploy, safe-verify)
+#           and jobs WITHOUT it (matrix-build, lint) — both sides of the rule.
+#   AL006 - `lint` lists itself in `needs:` — a dependency cycle.
+#   AL007 - `runs-on: ubuntu-latests` (typo label that no hosted runner matches).
+#   AL008 - deprecated `echo "::set-output name=note::$VALUE"` form.
+# Also exercised: a strategy.matrix with `include:`, workflow_dispatch typed
+# inputs, secrets via env indirection, and one LEGITIMATE counter-example job
+# (`safe-verify`: action pinned to a real commit SHA, payload passed through
+# env, timeout set) so every rule above also has a passing case to compare.
+# -----------------------------------------------------------------------------
+
+name: Unsafe Demo (synthesized - do not imitate)
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      dry_run:
+        description: Dry run only
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  VALUE: demo-payload
+
+jobs:
+  # AL005 (missing timeout-minutes) + matrix so expansion and lint run together.
+  matrix-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+        include:
+          - os: ubuntu-latest
+            tox-args: "--cov"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # AL003: attacker-controlled event payload interpolated into the script.
+      - name: Show PR metadata
+        run: |
+          echo "PR title: ${{ github.event.pull_request.title }}"
+          echo "PR author: ${{ github.event.pull_request.user.login }}"
+
+      # AL008: deprecated set-output workflow command.
+      - name: Export note (deprecated idiom)
+        id: vars
+        run: echo "::set-output name=note::$VALUE"
+
+      # AL004: secrets are not available in step-level if: conditions.
+      - name: Deploy preview
+        if: ${{ steps.vars.outputs.note != '' && secrets.PREVIEW_TOKEN != '' }}
+        run: echo "would deploy on ${{ matrix.os }}"
+
+  # AL002 + AL001 branch pin + AL003. Classic pull_request_target pwn request.
+  pr-target-repro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: matrix-build
+    steps:
+      - uses: actions/checkout@main
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # AL003: github.head_ref interpolated into run:.
+      - name: Build and test PR branch
+        run: |
+          git checkout ${{ github.head_ref }}
+          npm install && npm test
+
+  # AL006: needs cycle (job depends on itself); AL007: bogus runner label;
+  # AL005: another job with no timeout-minutes.
+  lint:
+    runs-on: ubuntu-latests
+    needs: [lint, pr-target-repro]
+    steps:
+      - uses: actions/checkout@v3
+      - run: npm run lint
+
+  # AL004 at job level; gate compares a secret to the event sender.
+  deploy:
+    if: ${{ secrets.ADMIN_DEPLOY == github.event.sender.login }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    needs: [matrix-build]
+    environment: production
+    steps:
+      - name: Push build
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: ./scripts/deploy.sh --dry-run=${{ inputs.dry_run }}
+
+  # Legitimate counter-example: real commit-SHA pin (actions/checkout v4.2.2),
+  # payload only through env indirection, timeout set. Should pass AL001-AL005.
+  safe-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Hash the PR title safely
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: echo "$PR_TITLE" | sha256sum

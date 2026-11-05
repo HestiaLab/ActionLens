@@ -1,0 +1,142 @@
+@namespace ActionLens.Ui.Components
+@implements IDisposable
+@using ActionLens.Ui.Services
+@using ActionLens.Core.Diagnostics
+@using Microsoft.JSInterop
+
+<section class="al-panel al-diagnostics" role="region" aria-label="Diagnostics">
+    <header class="al-panel-header">
+        <h2 class="al-panel-title">Diagnostics</h2>
+        <span class="al-panel-count" aria-hidden="true">@counts</span>
+    </header>
+
+    <p id="al-diagnostics-hint" class="al-hint">
+        Activate a finding to move the editor to its line. Reach the list with <kbd>Tab</kbd>,
+        move through it with the arrow keys, and activate with <kbd>Enter</kbd> or <kbd>Space</kbd>.
+    </p>
+
+    @if (Session.Report is null)
+    {
+        <p class="al-empty" role="status">No analysis yet.</p>
+    }
+    else if (items.Count == 0)
+    {
+        <p class="al-empty" role="status">No findings for this workflow, payload and scenario.</p>
+    }
+    else
+    {
+        <ul class="al-diagnostic-list" role="list" aria-labelledby="al-diagnostics-hint" @ref="_list">
+            @for (var index = 0; index < items.Count; index++)
+            {
+                var finding = items[index];
+                var position = index;
+                <li role="listitem" class="al-diagnostic-item">
+                    <button type="button"
+                            class="al-diagnostic @ReportPresentation.SeverityClass(finding.Severity)"
+                            @onclick="() => Open(finding)"
+                            @onkeydown="args => OnKeyAsync(args, position)"
+                            aria-label="@($"{ReportPresentation.SeverityLabel(finding.Severity)} {finding.Code} at {ReportPresentation.Position(finding.Range)}: {finding.Message}")">
+                        <span class="al-diagnostic-code">@finding.Code</span>
+                        <span class="al-diagnostic-severity">@ReportPresentation.SeverityLabel(finding.Severity)</span>
+                        <span class="al-diagnostic-position">@(finding.Range.IsKnown ? $"{finding.Range.Start.Line}:{finding.Range.Start.Column}" : "?")</span>
+                        <span class="al-diagnostic-message">@finding.Message</span>
+                        <span class="al-diagnostic-stage">@finding.Stage</span>
+                        @if (finding.Suggestion is { Length: > 0 } suggestion)
+                        {
+                            <span class="al-diagnostic-suggestion">@suggestion</span>
+                        }
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+
+    <div class="al-visually-hidden" role="status" aria-live="polite">@_announcement</div>
+</section>
+
+@code {
+    /// <summary>The selector the focus helper uses to find a row inside the list.</summary>
+    private const string RowSelector = ".al-diagnostic";
+
+    [Inject]
+    private AnalysisSession Session { get; set; } = default!;
+
+    [Inject]
+    private IEditorModule Module { get; set; } = default!;
+
+    private ElementReference _list;
+    private string _announcement = string.Empty;
+
+    private IReadOnlyList<Diagnostic> items => Session.Report?.Diagnostics ?? [];
+
+    private string counts
+    {
+        get
+        {
+            if (Session.Report is not { } report)
+            {
+                return string.Empty;
+            }
+
+            return $"{report.Totals.Criticals} critical · {report.Totals.Errors} error · {report.Totals.Warnings} warning · {report.Totals.Infos} info";
+        }
+    }
+
+    protected override void OnInitialized() => Session.Changed += OnChanged;
+
+    public void Dispose() => Session.Changed -= OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void Open(Diagnostic finding)
+    {
+        Session.RequestJump(EditorTarget.Workflow, finding.Range, finding);
+        _announcement = finding.Range.IsKnown
+            ? $"{ReportPresentation.SeverityLabel(finding.Severity)} {finding.Code}, moved the editor to line {finding.Range.Start.Line}, column {finding.Range.Start.Column}."
+            : $"{ReportPresentation.SeverityLabel(finding.Severity)} {finding.Code}. This finding carries no position, so there is nowhere to move.";
+    }
+
+    /// <summary>Moves focus to the first finding, for the Ctrl+Alt+3 chord. False when the list is empty.</summary>
+    public ValueTask<bool> FocusFirstAsync() => new(FocusRowAsync(0));
+
+    private async Task OnKeyAsync(KeyboardEventArgs args, int index)
+    {
+        if (args.Key is not ("ArrowDown" or "ArrowUp"))
+        {
+            return;
+        }
+
+        int next = args.Key == "ArrowDown"
+            ? Math.Min(index + 1, items.Count - 1)
+            : Math.Max(index - 1, 0);
+
+        if (next != index)
+        {
+            await FocusRowAsync(next);
+        }
+    }
+
+    /// <summary>
+    /// Focuses one row through the app's own JS bundle. Blazor cannot hold one <c>@ref</c> per row of a
+    /// dynamic list, so the list keeps a single container reference and the DOM resolves the row.
+    /// </summary>
+    private async Task<bool> FocusRowAsync(int index)
+    {
+        IJSObjectReference? module = await Module.GetAsync();
+        if (module is null)
+        {
+            _announcement = "The keyboard helper is unavailable, so use Tab to move between findings.";
+            return false;
+        }
+
+        try
+        {
+            return await module.InvokeAsync<bool>("focusNth", _list, RowSelector, index);
+        }
+        catch (Exception exception) when (exception is JSException or InvalidOperationException or ObjectDisposedException)
+        {
+            _announcement = "Focus could not be moved; use Tab to reach the next finding.";
+            return false;
+        }
+    }
+}

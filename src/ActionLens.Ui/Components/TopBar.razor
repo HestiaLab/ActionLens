@@ -1,0 +1,133 @@
+@namespace ActionLens.Ui.Components
+@implements IDisposable
+@using ActionLens.Ui.Services
+
+<header class="al-topbar" role="banner">
+    <span class="al-brand">
+        <span class="al-brand-mark" aria-hidden="true">◐</span>
+        <span class="al-brand-name">ActionLens</span>
+        <span class="al-brand-sub">GitHub Actions preflight · nothing is executed</span>
+    </span>
+
+    <div class="al-topbar-controls">
+        <span class="al-field">
+            <label for="al-example">Example</label>
+            @* Bound, not merely listening: a <select> whose value lives only in the DOM reports a choice
+               the app never receives, so the panel keeps showing the previous file. *@
+            <select id="al-example" @bind="_selectedExample" @bind:after="ApplyExample">
+                @foreach (WorkflowExample example in WorkflowExamples.Workflows)
+                {
+                    <option value="@example.FileName">
+                        @example.FileName — @example.Title
+                    </option>
+                }
+            </select>
+        </span>
+
+        <span class="al-field">
+            <label for="al-event">Trigger event</label>
+            <select id="al-event" @bind="_selectedEvent" @bind:after="ApplyEvent">
+                <option value="">(from the payload)</option>
+                @foreach (string eventName in _events)
+                {
+                    <option value="@eventName">@eventName</option>
+                }
+            </select>
+        </span>
+
+        <span class="al-field">
+            <label for="al-scenario">Scenario</label>
+            <select id="al-scenario" @bind="_selectedScenario" @bind:after="ApplyScenario">
+                @for (var index = 0; index < _scenarios.Count; index++)
+                {
+                    ScenarioOption option = _scenarios[index];
+                    <option value="@index">@option.Label</option>
+                }
+            </select>
+        </span>
+
+        <span class="al-field al-field--planned" role="group" aria-label="Controls that are not built yet">
+            <button type="button" disabled aria-disabled="true" title="Language selection arrives in a later phase.">Language</button>
+            <button type="button" disabled aria-disabled="true" title="Theme switching is a later phase; Atlas themes its chrome from prefers-color-scheme.">Theme</button>
+        </span>
+    </div>
+</header>
+
+@code {
+    [Inject]
+    private AnalysisSession Session { get; set; } = default!;
+
+    private IReadOnlyList<string> _events = [];
+    private IReadOnlyList<ScenarioOption> _scenarios = [];
+    private int _selectedScenario;
+    private string _selectedExample = string.Empty;
+    private string _selectedEvent = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnChanged;
+        RefreshChoices();
+    }
+
+    public void Dispose() => Session.Changed -= OnChanged;
+
+    private void OnChanged()
+    {
+        RefreshChoices();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Rebuilds the two derived dropdowns. Events come from what the file declares and scenarios from the
+    /// jobs the report found, so neither list can offer a choice the workflow does not support.
+    /// </summary>
+    private void RefreshChoices()
+    {
+        _events = Session.SelectableEvents();
+        _scenarios = Session.SelectableScenarios();
+        // The session is the single source of truth for which file and event are in play, so the bound
+        // fields follow it back: a choice the session rejected (an unknown name, say) resets the control
+        // instead of leaving it displaying something the analysis never used.
+        _selectedExample = Session.FileName;
+        _selectedEvent = Session.TriggerEvent ?? string.Empty;
+        if (_selectedScenario >= _scenarios.Count)
+        {
+            _selectedScenario = 0;
+        }
+    }
+
+    private void ApplyExample()
+    {
+        WorkflowExample? example = WorkflowExamples.Workflows
+            .FirstOrDefault(candidate => string.Equals(candidate.FileName, _selectedExample, StringComparison.Ordinal));
+        if (example is null)
+        {
+            RefreshChoices();
+            return;
+        }
+
+        _selectedScenario = 0;
+        Session.LoadExample(example, WorkflowExamples.PayloadFor(null), triggerEvent: null);
+    }
+
+    private void ApplyEvent()
+    {
+        Session.SelectTriggerEvent(string.IsNullOrEmpty(_selectedEvent) ? null : _selectedEvent);
+    }
+
+    /// <summary>
+    /// Runs after <c>@bind</c> has written the new index into <see cref="_selectedScenario"/>. The index is
+    /// clamped rather than trusted because <see cref="RefreshChoices"/> can shorten the list between the
+    /// render and this callback.
+    /// </summary>
+    private void ApplyScenario()
+    {
+        if (_selectedScenario < 0 || _selectedScenario >= _scenarios.Count)
+        {
+            _selectedScenario = 0;
+            return;
+        }
+
+        Session.SelectScenario(_scenarios[_selectedScenario].Scenario);
+    }
+}

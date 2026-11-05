@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    The ActionLens presentation layer: every component the reader sees, the services they inject, and the
+    stylesheet they are drawn with. It is a Razor class library so bUnit can render the components in
+    tests — the component-layer defects recorded in docs/w4-verification.md were invisible to the engine
+    test suite precisely because no component could be rendered outside a browser.
+  -->
+  <PropertyGroup>
+    <RootNamespace>ActionLens.Ui</RootNamespace>
+    <AssemblyName>ActionLens.Ui</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Atlas.Blazor" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ActionLens.Core\ActionLens.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The workflow and payload examples are embedded resources rather than wwwroot files, so the first
+       analysis never depends on a fetch: see Services/WorkflowExamples.cs. The globs are relative to
+       THIS project directory — the previous crash came from a glob one level short that matched nothing
+       while MSBuild stayed silent; ActionLens.Ui.Tests pins the resulting resource set. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\samples\workflows\*.yml" Link="Examples\%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\samples\payloads\*.json" Link="Examples\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+{
+  "event_name": "pull_request",
+  "action": "opened",
+  "number": 128,
+  "repository": { "full_name": "HestiaLab/ActionLens", "default_branch": "main" },
+  "sender": { "login": "contributor" },
+  "pull_request": {
+    "state": "open",
+    "title": "Add offline packaging",
+    "draft": false,
+    "merged": false,
+    "base": { "ref": "main", "sha": "1111111111111111111111111111111111111111" },
+    "head": { "ref": "feature/offline-packaging", "sha": "2222222222222222222222222222222222222222" }
+  }
+}

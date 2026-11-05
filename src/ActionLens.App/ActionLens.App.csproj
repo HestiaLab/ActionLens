@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!--
+    The WASM host: Program.cs, the router pages, index.html, and the CodeMirror bundle. Everything the
+    reader interacts with lives in ActionLens.Ui (a Razor class library) so the components can be
+    rendered by bUnit; this project registers the host-only services behind the interfaces Ui defines.
+  -->
+  <PropertyGroup>
+    <RootNamespace>ActionLens.App</RootNamespace>
+    <AssemblyName>ActionLens.App</AssemblyName>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!-- Static preflight: the app must never reach the network at runtime. -->
+    <BlazorWebAssemblyLoadAllGlobalizationData>false</BlazorWebAssemblyLoadAllGlobalizationData>
+    <!-- Set to true only when the generated bundle is known-good and Node should not be consulted. -->
+    <SkipEditorBundle Condition="'$(SkipEditorBundle)' == ''">false</SkipEditorBundle>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RepoRoot>$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), package.json))</RepoRoot>
+    <EditorBundleOutput>$(MSBuildProjectDirectory)\wwwroot\js\dist\actionlens-editor.js</EditorBundleOutput>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Atlas.Blazor" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ActionLens.Core arrives transitively; the engine stays out of this host on purpose. -->
+    <ProjectReference Include="..\ActionLens.Ui\ActionLens.Ui.csproj" />
+  </ItemGroup>
+
+  <!--
+    The editors are CodeMirror 6, bundled from TypeScript (ClientScripts/editor.ts below). The examples
+    under samples/ are embedded in ActionLens.Ui, not here — see Services/EditorModule.cs for the seam.
+  -->
+  <ItemGroup>
+    <EditorScriptSource Include="$(MSBuildProjectDirectory)\ClientScripts\**\*.ts" />
+    <EditorScriptSource Include="$(RepoRoot)\package.json" />
+  </ItemGroup>
+
+  <!--
+    Runs `npm run build:editor` when any TypeScript source is newer than the bundle. The Exec has no
+    IgnoreExitCode / WarnAndContinue: a failed rebuild used to leave the previous (possibly stale)
+    bundle in place and still report a successful build, which is exactly the "silently skipped bundle"
+    failure this target exists to prevent.
+  -->
+  <Target Name="BuildEditorBundle"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(SkipEditorBundle)' != 'true'"
+          Inputs="@(EditorScriptSource)"
+          Outputs="$(EditorBundleOutput)">
+
+    <Error Condition="'$(RepoRoot)' == ''"
+           Text="No package.json found above $(MSBuildProjectDirectory); cannot build the editor bundle." />
+
+    <Exec Command="npm run build:editor"
+          WorkingDirectory="$(RepoRoot)" />
+  </Target>
+
+  <Target Name="VerifyEditorBundle" BeforeTargets="BeforeBuild" DependsOnTargets="BuildEditorBundle">
+    <Error Condition="'$(SkipEditorBundle)' != 'true' And !Exists('$(EditorBundleOutput)')"
+           Text="The CodeMirror bundle $(EditorBundleOutput) is missing or failed to build. Run `npm install` (or `npm run seed:offline` on a machine without registry access) and then `npm run build:editor` in $(RepoRoot)." />
+  </Target>
+
+</Project>

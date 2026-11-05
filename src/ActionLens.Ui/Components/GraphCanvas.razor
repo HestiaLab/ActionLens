@@ -1,0 +1,523 @@
+@namespace ActionLens.Ui.Components
+@implements IDisposable
+@using ActionLens.Ui.Services
+@using ActionLens.Core.Reporting
+@using ActionLens.Core.Scenarios
+@* Atlas.Core.Layout has a LayoutNode of its own, and _Imports brings both namespaces in, so the graph
+   node has to be named explicitly rather than left to the reader of the file. *@
+@using LayoutNode = ActionLens.Core.Graph.LayoutNode;
+
+@*
+    The DAG canvas. It draws what the engine computed and nothing else: columns come from Core's layers,
+    rows from its slots, arrows from its edge list, and the lane below the grid exists only for the jobs
+    Core refuses to place. There is no panning, no zoom, no force layout and no re-ordering here — a
+    deterministic picture is part of the product, so that two readers of one report see one graph.
+*@
+@{
+    GraphView? view = BuildView();
+}
+
+@if (view is null)
+{
+    <p class="al-empty" role="status">There is nothing to draw yet.</p>
+}
+else
+{
+    <svg class="al-graph-svg" role="group" aria-label="@view.Summary" aria-describedby="al-graph-hint"
+         width="@GraphGeometry.Number(view.Width)" height="@GraphGeometry.Number(view.Height)"
+         viewBox="@($"0 0 {GraphGeometry.Number(view.Width)} {GraphGeometry.Number(view.Height)}")"
+         @ref="_root">
+        <defs>
+            <marker id="al-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path class="al-arrowhead" d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+            <marker id="al-arrow-cycle" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+                <path class="al-arrowhead al-arrowhead--cycle" d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+            <marker id="al-arrow-open" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path class="al-arrowhead al-arrowhead--open" d="M 0 1 L 8 4 L 0 7" />
+            </marker>
+        </defs>
+
+        <g class="al-graph-edges" aria-hidden="true" focusable="false">
+            @foreach (DrawnEdge edge in view.Edges)
+            {
+                if (edge.Path.Length > 0)
+                {
+                    <path class="al-edge" d="@edge.Path" marker-end="url(#al-arrow)" />
+                }
+            }
+            @foreach (string stub in view.Dangling)
+            {
+                <path class="al-edge al-edge--dangling" d="@stub" marker-end="url(#al-arrow-open)" />
+            }
+        </g>
+
+        <g class="al-graph-nodes">
+            @foreach (GraphChip chip in view.Placed)
+            {
+                @* The index is captured because Blazor cannot hold one @ref per node of a dynamic graph. *@
+                int focusIndex = chip.FocusIndex;
+                <GraphJobNode Box="@chip.Box"
+                              Tone="@chip.Tone"
+                              Glyph="@chip.Glyph"
+                              JobId="@chip.JobId"
+                              StateLine="@chip.StateLine"
+                              DetailLine="@chip.DetailLine"
+                              Tooltip="@chip.Tooltip"
+                              AriaLabel="@chip.AriaLabel"
+                              Selected="@chip.Selected"
+                              OnActivated="() => ActivateAsync(focusIndex)"
+                              OnKeyDown="args => OnKeyAsync(args, focusIndex)" />
+            }
+        </g>
+
+        @if (view.Band is not null)
+        {
+            <g class="al-graph-band-caption" aria-hidden="true" focusable="false">
+                <line class="al-band-rule" x1="0" y1="@GraphGeometry.Number(view.Band.Top - 14)"
+                      x2="@GraphGeometry.Number(view.Width)" y2="@GraphGeometry.Number(view.Band.Top - 14)" />
+                <text class="al-band-caption" x="4" y="@GraphGeometry.Number(view.Band.Top + 2)">@view.Band.Caption</text>
+            </g>
+            <g class="al-graph-band-edges" aria-hidden="true" focusable="false">
+                @foreach (string chain in view.Band.Chains)
+                {
+                    <path class="al-edge al-edge--cycle" d="@chain" marker-end="url(#al-arrow-cycle)" />
+                }
+                @foreach (string loop in view.Band.Loops)
+                {
+                    <path class="al-edge al-edge--loop" d="@loop" marker-end="url(#al-arrow-cycle)" />
+                }
+            </g>
+            <g class="al-graph-band-nodes">
+                @foreach (GraphChip chip in view.Band.Chips)
+                {
+                    int focusIndex = chip.FocusIndex;
+                    <GraphJobNode Box="@chip.Box"
+                                  Tone="@chip.Tone"
+                                  Glyph="@chip.Glyph"
+                                  JobId="@chip.JobId"
+                                  StateLine="@chip.StateLine"
+                                  DetailLine="@chip.DetailLine"
+                                  Tooltip="@chip.Tooltip"
+                                  AriaLabel="@chip.AriaLabel"
+                                  Selected="@chip.Selected"
+                                  OnActivated="() => ActivateAsync(focusIndex)"
+                                  OnKeyDown="args => OnKeyAsync(args, focusIndex)" />
+                }
+            </g>
+        }
+    </svg>
+
+    <p class="al-visually-hidden" role="status" aria-live="polite">@_announcement</p>
+}
+
+@code {
+    /// <summary>The selector the focus helper uses, matching every focusable box in document order.</summary>
+    private const string NodeSelector = ".al-graph-node";
+
+    /// <summary>How many blocked chips fit one lane row before the lane wraps.</summary>
+    private const int BlockedPerRow = 4;
+
+    /// <summary>The room the lane's own caption line takes above its first row of chips.</summary>
+    private const double LaneCaption = 22;
+
+    [Inject]
+    private AnalysisSession Session { get; set; } = default!;
+
+    [Inject]
+    private IEditorModule Module { get; set; } = default!;
+
+    /// <summary>The report to draw, held by the panel so the canvas has one source of truth.</summary>
+    [Parameter]
+    public AnalysisReport? Report { get; set; }
+
+    private ElementReference _root;
+    private IReadOnlyList<GraphChip> _chips = [];
+    private string _announcement = string.Empty;
+
+    /// <summary>One focusable box: a placed job, a job inside a cycle, or a job blocked behind one.</summary>
+    private sealed record GraphChip(
+        string JobId,
+        PixelBox Box,
+        string Tone,
+        string Glyph,
+        string StateLine,
+        string DetailLine,
+        string Tooltip,
+        string AriaLabel,
+        bool Selected,
+        int FocusIndex);
+
+    /// <summary>The lane under the grid, holding the jobs Core would not order.</summary>
+    private sealed record Band(
+        double Top,
+        double Bottom,
+        string Caption,
+        IReadOnlyList<GraphChip> Chips,
+        IReadOnlyList<string> Chains,
+        IReadOnlyList<string> Loops);
+
+    /// <summary>Everything one render pass needs, built from the report.</summary>
+    private sealed record GraphView(
+        double Width,
+        double Height,
+        string Summary,
+        IReadOnlyList<DrawnEdge> Edges,
+        IReadOnlyList<string> Dangling,
+        IReadOnlyList<GraphChip> Placed,
+        Band? Band);
+
+    protected override void OnInitialized() => Session.Changed += OnChanged;
+
+    public void Dispose() => Session.Changed -= OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    /// <summary>
+    /// Resolves the report into pixels. Recomputed per render rather than cached, because the selection,
+    /// the scenario and the file can each change underneath it; the work is a few multiplications over a
+    /// graph the size of one workflow.
+    /// </summary>
+    private GraphView? BuildView()
+    {
+        if (Report is not { } report)
+        {
+            return null;
+        }
+
+        GraphCellSize size = GraphCellSize.Default;
+        GraphReport graph = report.Graph;
+        GraphPlacement placement = GraphGeometry.Build(graph.Nodes, graph.Edges, graph.LayerCount, graph.MaxLayerWidth, size);
+
+        Dictionary<string, JobReport> byId = new(StringComparer.Ordinal);
+        foreach (JobReport job in report.Jobs)
+        {
+            byId.TryAdd(job.JobId, job);
+        }
+
+        List<GraphChip> placed = [];
+        foreach (PlacedNode placedNode in placement.Nodes)
+        {
+            LayoutNode node = placedNode.Node;
+            byId.TryGetValue(node.JobId, out JobReport? job);
+            int layerWidth = node.Layer < placement.LayerWidths.Count ? placement.LayerWidths[node.Layer] : 1;
+            placed.Add(PlacedChip(node, placedNode.Box, job, graph.LayerCount, layerWidth, placed.Count));
+        }
+
+        Band? band = graph.UnplacedJobs.Count > 0 || graph.Cycles.Count > 0
+            ? BuildBand(report, byId, size, placement.Height, placed.Count)
+            : null;
+
+        List<string> dangling = [];
+        foreach (PlacedNode placedNode in placement.Nodes)
+        {
+            if (HasUnplacedDependent(report, graph, placedNode.Node.JobId))
+            {
+                dangling.Add(GraphGeometry.DanglingPath(placedNode.Box, size));
+            }
+        }
+
+        // Every focusable box, in the order the DOM holds them: the grid first, then the lane.
+        List<GraphChip> focusable = [.. placed];
+        if (band is not null)
+        {
+            focusable.AddRange(band.Chips);
+        }
+
+        _chips = focusable;
+
+        double height = band is null ? placement.Height : Math.Max(placement.Height, band.Bottom);
+        double width = Math.Max(placement.Width, BandWidth(graph, size));
+
+        return new GraphView(width, height, Summary(report, graph, placement), placement.Edges, dangling, placed, band);
+    }
+
+    private Band BuildBand(
+        AnalysisReport report,
+        Dictionary<string, JobReport> byId,
+        GraphCellSize size,
+        double gridHeight,
+        int firstIndex)
+    {
+        GraphReport graph = report.Graph;
+        List<GraphChip> chips = [];
+        List<string> chains = [];
+        List<string> loops = [];
+        double laneTop = gridHeight + (2 * size.RowGap);
+        int index = firstIndex;
+        int row = 0;
+        double lowest = laneTop + LaneCaption;
+
+        foreach (IReadOnlyList<string> cycle in graph.Cycles)
+        {
+            // Core writes a cycle as the path that closes it, so the last id repeats the first: the chips
+            // are the steps, and the repeated id is what the loop arrow points back at.
+            bool closes = cycle.Count > 1 && string.Equals(cycle[cycle.Count - 1], cycle[0], StringComparison.Ordinal);
+            IReadOnlyList<string> steps = closes ? cycle.Take(cycle.Count - 1).ToList() : cycle;
+            double rowTop = RowTop(laneTop, row, size);
+            List<PixelBox> boxes = [];
+            string pathText = string.Join(" → ", cycle);
+
+            for (int column = 0; column < steps.Count; column++)
+            {
+                string jobId = steps[column];
+                PixelBox box = GraphGeometry.ChipBox(column, 0, size.NodeHeight, size, rowTop);
+                boxes.Add(box);
+                lowest = Math.Max(lowest, box.Bottom);
+                byId.TryGetValue(jobId, out JobReport? job);
+                RunState state = job?.State ?? RunState.Unknown;
+                chips.Add(new GraphChip(
+                    jobId,
+                    box,
+                    "cycle",
+                    "↻",
+                    ReportPresentation.StateChip(state),
+                    "not placed: inside a cycle",
+                    $"{jobId} — in the cycle {pathText}",
+                    $"{jobId}, inside a cycle ({pathText}), {ReportPresentation.StateChip(state)}, needs {Needs(job)}, not placed by the layout",
+                    IsSelected(jobId),
+                    index++));
+
+                if (boxes.Count > 1)
+                {
+                    chains.Add(GraphGeometry.EdgePath(boxes[^2], boxes[^1]));
+                }
+            }
+
+            if (boxes.Count > 0)
+            {
+                string loop = GraphGeometry.LoopPath(boxes[^1], boxes[0]);
+                loops.Add(loop);
+                lowest = Math.Max(lowest, boxes[^1].Bottom + GraphGeometry.LoopDip);
+            }
+
+            row++;
+        }
+
+        int blocked = 0;
+        foreach (string jobId in graph.UnplacedJobs)
+        {
+            if (InAnyCycle(graph, jobId))
+            {
+                continue;
+            }
+
+            // The lane keeps its own rows instead of borrowing the grid's, because these jobs have no layer.
+            double rowTop = RowTop(laneTop, row + (blocked / BlockedPerRow), size);
+            PixelBox box = GraphGeometry.ChipBox(blocked % BlockedPerRow, 0, size.NodeHeight, size, rowTop);
+            byId.TryGetValue(jobId, out JobReport? job);
+            RunState state = job?.State ?? RunState.Unknown;
+            chips.Add(new GraphChip(
+                jobId,
+                box,
+                "blocked",
+                "!",
+                ReportPresentation.StateChip(state),
+                "not placed: blocked behind a cycle",
+                $"{jobId} — blocked behind a cycle, needs {Needs(job)}",
+                $"{jobId}, {ReportPresentation.StateChip(state)}, blocked behind a cycle, needs {Needs(job)}, not placed by the layout",
+                IsSelected(jobId),
+                index++));
+            lowest = Math.Max(lowest, box.Bottom);
+            blocked++;
+        }
+
+        return new Band(
+            laneTop,
+            lowest + size.Padding,
+            $"Not placed — the layout refuses to give these {graph.UnplacedJobs.Count} job(s) a position.",
+            chips,
+            chains,
+            loops);
+    }
+
+    /// <summary>Top edge of one lane row, below the row of caption text the lane starts with.</summary>
+    private static double RowTop(double laneTop, int row, GraphCellSize size) =>
+        laneTop + LaneCaption + (row * (size.NodeHeight + size.RowGap));
+
+    private static double BandWidth(GraphReport graph, GraphCellSize size)
+    {
+        int widest = 1;
+        foreach (IReadOnlyList<string> cycle in graph.Cycles)
+        {
+            widest = Math.Max(widest, Math.Max(cycle.Count - 1, 1));
+        }
+
+        return Math.Max(1, Math.Min(widest, BlockedPerRow) - 1) * size.ColumnStep + size.NodeWidth + (2 * size.Padding);
+    }
+
+    private static bool InAnyCycle(GraphReport graph, string jobId) =>
+        graph.Cycles.Any(cycle => cycle.Contains(jobId, StringComparer.Ordinal));
+
+    private static bool HasUnplacedDependent(AnalysisReport report, GraphReport graph, string jobId)
+    {
+        foreach (string blocked in graph.UnplacedJobs)
+        {
+            foreach (JobReport job in report.Jobs)
+            {
+                if (string.Equals(job.JobId, blocked, StringComparison.Ordinal)
+                    && job.Needs.Contains(jobId, StringComparer.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static string Needs(JobReport? job) =>
+        job is null || job.Needs.Count == 0 ? "nothing" : string.Join(", ", job.Needs);
+
+    private static string Summary(AnalysisReport report, GraphReport graph, GraphPlacement placement) =>
+        string.Join(
+            " · ",
+            [
+                $"{placement.Nodes.Count} of {graph.JobCount} job(s) placed, {Math.Max(graph.LayerCount, 1)} layer(s)",
+                $"{graph.Edges.Count} edge(s)",
+                graph.Cycles.Count > 0
+                    ? $"{graph.Cycles.Count} cycle(s), {graph.UnplacedJobs.Count} job(s) not placed"
+                    : "acyclic",
+                $"+{report.Totals.WillRun} will run · −{report.Totals.WillNotRun} will not · ?{report.Totals.UnknownJobs} unknown",
+                report.Totals.JobInstances is { } instances
+                    ? $"{report.Jobs.Count} job box(es) stand for {instances} run(s)"
+                    : $"{report.Jobs.Count} job box(es); the run count stays unknown until a matrix expands",
+            ]);
+
+    private GraphChip PlacedChip(LayoutNode node, PixelBox box, JobReport? job, int layerCount, int layerWidth, int focusIndex)
+    {
+        RunState state = job?.State ?? RunState.Unknown;
+        string instances = ReportPresentation.InstanceSummary(job?.Matrix);
+        string stateLine = ReportPresentation.StateChip(state);
+        string position = $"column {node.Layer + 1} of {Math.Max(layerCount, 1)}, row {node.Slot + 1} of {Math.Max(layerWidth, 1)}";
+
+        return new GraphChip(
+            node.JobId,
+            box,
+            ReportPresentation.StateTone(state),
+            ReportPresentation.StateMarker(state),
+            stateLine,
+            instances,
+            $"{node.JobId} — {stateLine}, {instances}",
+            $"{node.JobId}, {stateLine}, {instances}, {position}, needs {Needs(job)}",
+            IsSelected(node.JobId),
+            focusIndex);
+    }
+
+    private bool IsSelected(string jobId) => string.Equals(Session.SelectedJobId, jobId, StringComparison.Ordinal);
+
+    private async Task ActivateAsync(int focusIndex)
+    {
+        GraphChip? chip = _chips.FirstOrDefault(candidate => candidate.FocusIndex == focusIndex);
+        if (chip is null)
+        {
+            return;
+        }
+
+        Session.SelectJob(chip.JobId);
+        _announcement = Session.SelectedJobId is null
+            ? $"{chip.JobId} could not be selected; the report no longer has that job."
+            : $"{chip.JobId} selected: {chip.StateLine}, {chip.DetailLine}. The inspector highlights it.";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnKeyAsync(KeyboardEventArgs args, int focusIndex)
+    {
+        switch (args.Key)
+        {
+            case "Enter" or " " or "Spacebar":
+                await ActivateAsync(focusIndex);
+                return;
+            case "ArrowRight" or "ArrowLeft" or "ArrowUp" or "ArrowDown":
+                break;
+            default:
+                return;
+        }
+
+        GraphChip? from = _chips.FirstOrDefault(candidate => candidate.FocusIndex == focusIndex);
+        if (from is null)
+        {
+            return;
+        }
+
+        GraphChip? to = Neighbour(from, args.Key);
+        if (to is null)
+        {
+            _announcement = $"{from.JobId} is the last box in that direction.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        _announcement = $"Focus moved to {to.JobId}.";
+        await FocusChipAsync(to.FocusIndex);
+    }
+
+    /// <summary>
+    /// The nearest box in the pressed direction, by box centre. This works for the grid and for the lane
+    /// below it without the canvas keeping a second coordinate system, and it only moves focus: the Tab
+    /// order is still the document order the browser already walks.
+    /// </summary>
+    private GraphChip? Neighbour(GraphChip from, string key)
+    {
+        bool horizontal = key is "ArrowLeft" or "ArrowRight";
+        int sign = key is "ArrowRight" or "ArrowDown" ? 1 : -1;
+        GraphChip? best = null;
+        double bestScore = double.MaxValue;
+
+        foreach (GraphChip candidate in _chips)
+        {
+            if (candidate.FocusIndex == from.FocusIndex)
+            {
+                continue;
+            }
+
+            double along = ((horizontal ? candidate.Box.MidX - from.Box.MidX : candidate.Box.MidY - from.Box.MidY)) * sign;
+            if (along <= 1)
+            {
+                // A box has to lie in the pressed direction, not merely be drawn past the current one.
+                continue;
+            }
+
+            double across = horizontal
+                ? Math.Abs(candidate.Box.MidY - from.Box.MidY)
+                : Math.Abs(candidate.Box.MidX - from.Box.MidX);
+            double score = along + (across * 3);
+
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Moves focus through the app's own bundle. Blazor cannot hold one <c>@ref</c> per node of a dynamic
+    /// graph, so the canvas keeps the SVG reference and lets the DOM resolve the box — the same helper the
+    /// diagnostics list uses, and it says out loud when that helper is unavailable instead of going quiet.
+    /// </summary>
+    private async Task FocusChipAsync(int focusIndex)
+    {
+        IJSObjectReference? module = await Module.GetAsync();
+        if (module is null)
+        {
+            _announcement = "The keyboard helper is unavailable, so use Tab to reach the next job.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        try
+        {
+            await module.InvokeAsync<bool>("focusNth", _root, NodeSelector, focusIndex);
+        }
+        catch (Exception exception) when (exception is JSException or InvalidOperationException or ObjectDisposedException)
+        {
+            _announcement = "Focus could not be moved; use Tab to reach the next job.";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+}

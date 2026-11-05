@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- xUnit v3 runs on Microsoft.Testing.Platform; the .NET 10 SDK only supports VSTest
+         through this opt-in, so 'dotnet test' needs it. -->
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ActionLens.Core.Tests</RootNamespace>
+    <AssemblyName>ActionLens.Core.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ActionLens.Core\ActionLens.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup Label="Workflow fixtures shared with samples/ and CI dogfooding">
+    <Content Include="..\..\samples\workflows\**\*.yml" Link="samples\workflows\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup Label="Deliberately malformed contract fixture, see docs/review-v1-grill.md section 8">
+    <Content Include="ContractFixtures\**\*.yml" Link="contract\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup Label="Vendored GitHub expression golden corpus, see tests/golden/languageservices/README.md">
+    <Content Include="..\golden\languageservices\**\*.json" Link="golden\languageservices\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

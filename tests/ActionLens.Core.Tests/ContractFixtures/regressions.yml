@@ -1,0 +1,56 @@
+# Contract regression fixture — deliberately malformed input, not an example.
+#
+# docs/review-v1-grill.md §8 item 7 asks that the three reproduced failure shapes
+# live in a fixture, not only as string literals inside a test. This file is
+# analysed end to end by ContractRegressionTests. Every `if:` / `strategy:` below
+# used to make the engine report INT001 ("ActionLens stopped partway through this
+# analysis") while the whole suite was green.
+#
+# It is kept out of samples/workflows/ on purpose: those are verbatim copies of
+# real workflows with hand-worked expected numbers; a deliberately broken file
+# does not belong in the example dropdown.
+
+name: contract-regressions
+on:
+  push:
+    # No `branches:`, only `branches-ignore:`. With no payload the ref type is
+    # unknown and the old code indexed an empty list.
+    branches-ignore:
+      - 'wip/**'
+
+jobs:
+  join-zero-args:
+    runs-on: ubuntu-latest
+    if: join()
+    steps:
+      - run: echo hi
+
+  tojson-zero-args:
+    runs-on: ubuntu-latest
+    if: toJSON()
+    steps:
+      - run: echo hi
+
+  fromjson-zero-args:
+    runs-on: ubuntu-latest
+    if: fromJSON()
+    steps:
+      - run: echo hi
+
+  include-case-collision:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        include:
+          # `OS` and `os` differ only by case. The model keeps both (Ordinal),
+          # while Actions matches matrix keys case-insensitively.
+          - OS: windows-latest
+            os: ubuntu-latest
+    steps:
+      - run: echo hi
+
+  healthy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi

@@ -1,0 +1,108 @@
+@namespace ActionLens.Ui.Components
+@implements IAsyncDisposable
+@using ActionLens.Ui.Services
+@using ActionLens.Ui.Workspace
+@using ActionLens.Core.Diagnostics
+@using ActionLens.Core.Text
+@using Atlas.Blazor.Components
+@using Atlas.Core
+@using Atlas.Core.Items
+@using Atlas.Core.Operations
+
+<section class="al-shell" @onkeydown="OnKeyDown" aria-label="ActionLens workspace">
+    @if (_initializationError is not null)
+    {
+        <div class="al-shell-error" role="alert">
+            <h2 class="al-panel-title">The workspace could not start</h2>
+            <p>
+                Atlas returned <code>@_initializationError</code>. ActionLens keeps the analysis engine out
+                of the shell, so this is a shell-startup failure and not a problem with your workflow.
+            </p>
+            <button type="button" class="al-action" @onclick="RetryAsync">Retry</button>
+        </div>
+    }
+    else if (_workspace is null)
+    {
+        <div class="al-shell-loading" role="status">Preparing the ActionLens workspace…</div>
+    }
+    else
+    {
+        <AtlasWorkspaceHost @key="@_workspace"
+                            Workspace="@_workspace"
+                            WorkspaceOwnership="@WorkspaceOwnership.External"
+                            EnableInteractions="true"
+                            KeyboardCommands="@_keyboardCommands"
+                            SplitterOptions="@_splitterOptions"
+                            OnError="OnHostError">
+            <TopToolbarContent>
+                <TopBar />
+            </TopToolbarContent>
+
+            <StatusBarContent>
+                <StatusStrip Revision="@_revision" Announcement="@_announcement" />
+            </StatusBarContent>
+
+            <ContentRoutes>
+                <AtlasContentRoute Kind="@ActionLensContentKinds.Workflow">
+                    <ChildContent Context="content">
+                        <CodeEditor @ref="_workflowEditor"
+                                    Text="@Session.WorkflowText"
+                                    Language="yaml"
+                                    AriaLabel="Workflow YAML"
+                                    SurfaceLabel="workflow editor"
+                                    OnTextChanged="OnWorkflowTextChanged" />
+                    </ChildContent>
+                </AtlasContentRoute>
+
+                <AtlasContentRoute Kind="@ActionLensContentKinds.Payload">
+                    <ChildContent Context="content">
+                        <CodeEditor @ref="_payloadEditor"
+                                    Text="@Session.PayloadText"
+                                    Language="json"
+                                    AriaLabel="Event payload JSON"
+                                    SurfaceLabel="payload editor"
+                                    OnTextChanged="OnPayloadTextChanged" />
+                    </ChildContent>
+                </AtlasContentRoute>
+
+                <AtlasContentRoute Kind="@ActionLensContentKinds.Canvas">
+                    <ChildContent Context="content">
+                        <CanvasPanel />
+                    </ChildContent>
+                </AtlasContentRoute>
+
+                <AtlasContentRoute Kind="@ActionLensContentKinds.Inspector">
+                    <ChildContent Context="content">
+                        <InspectorPanel />
+                    </ChildContent>
+                </AtlasContentRoute>
+
+                <AtlasContentRoute Kind="@ActionLensContentKinds.Diagnostics">
+                    <ChildContent Context="content">
+                        <DiagnosticsPanel @ref="_diagnosticsPanel" />
+                    </ChildContent>
+                </AtlasContentRoute>
+
+                <AtlasContentRoute Kind="@ActionLensContentKinds.Summary">
+                    <ChildContent Context="content">
+                        <SummaryPanel />
+                    </ChildContent>
+                </AtlasContentRoute>
+            </ContentRoutes>
+
+            <ErrorTemplate Context="hostError">
+                <div class="al-host-error" role="alert">
+                    This panel could not be rendered by Atlas (code @hostError.Code).
+                    The analysis itself is unaffected; open another panel or reset the layout.
+                </div>
+            </ErrorTemplate>
+        </AtlasWorkspaceHost>
+    }
+
+    <p class="al-visually-hidden" id="al-keyboard-help">
+        Atlas handles the workspace keys: Ctrl+Tab and Ctrl+Shift+Tab move between tabs, Ctrl+W closes the
+        active document, and Alt plus an arrow resizes the focused splitter or moves focus between regions.
+        ActionLens adds Ctrl+Alt+1 for the workflow editor, Ctrl+Alt+2 for the event payload and
+        Ctrl+Alt+3 for the diagnostics list.
+    </p>
+</section>

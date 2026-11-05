@@ -1,0 +1,22 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-Recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <!-- IDE0005 (unnecessary usings) only runs when a doc file is produced; CS1591 stays off so
+         the engine is not blocked on doc-comment churn while it is still moving. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CA1720 flags identifiers that contain a type name. GitHubValue.String / .Object / .Array are
+         the accessor names that read naturally against GitHub's own value kinds, and renaming them to
+         AsString/AsObject would only repeat the "As" prefix everywhere it is read. Scoped to that one
+         rule; everything else in latest-Recommended stays an error. -->
+    <NoWarn>$(NoWarn);CA1707;CA1720;CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

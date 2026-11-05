@@ -1,0 +1,160 @@
+@namespace ActionLens.Ui.Components
+@implements IDisposable
+@using ActionLens.Ui.Services
+@using ActionLens.Core.Reporting
+@using ActionLens.Core.Scenarios
+
+<section class="al-panel al-inspector" role="region" aria-label="Inspector">
+    <header class="al-panel-header">
+        <h2 class="al-panel-title">Inspector</h2>
+        <span class="al-panel-count" aria-hidden="true">@counts</span>
+    </header>
+
+    @if (Session.Report is not { } report)
+    {
+        <p class="al-empty" role="status">Waiting for the first analysis.</p>
+    }
+    else if (report.Jobs.Count == 0)
+    {
+        <p class="al-empty" role="status">
+            This report has no jobs — @if (report.IsBlocked)
+            { <text>the workflow could not be read far enough to build a job list; see the diagnostics.</text> }
+            else
+            { <text>the file declares no <code>jobs:</code>.</text> }
+        </p>
+    }
+    else
+    {
+        @if (Session.SelectedJobId is { Length: > 0 } selectedId)
+        {
+            <p class="al-inspector-selection" role="status">
+                Highlighted below: the job picked in the graph, <code>@selectedId</code>.
+            </p>
+        }
+
+        <ul class="al-job-list" role="list">
+            @foreach (JobReport job in report.Jobs)
+            {
+                bool selected = string.Equals(job.JobId, Session.SelectedJobId, StringComparison.Ordinal);
+                <li role="listitem" class="@(selected ? "al-job al-job--selected" : "al-job") @(job.State == RunState.Unknown ? "al-job--unknown" : null)"
+                    aria-current="@(selected ? "true" : null)">
+                    <div class="al-job-head">
+                        <span class="@ReportPresentation.StateClass(job.State)"
+                              title="@ReportPresentation.StateMeaning(job.State)"
+                              aria-label="@($"{ReportPresentation.StateLabel(job.State)}: {ReportPresentation.StateMeaning(job.State)}")">
+                            <span aria-hidden="true">@ReportPresentation.StateMarker(job.State)</span>
+                            @ReportPresentation.StateLabel(job.State)
+                        </span>
+                        <span class="al-job-id">@job.JobId</span>
+                        <span class="al-job-outcome">ends @ReportPresentation.OutcomeLabel(job.Outcome)</span>
+                    </div>
+
+                    @if (job.DeclaredName is { Length: > 0 } declaredName && !string.Equals(declaredName, job.JobId, StringComparison.Ordinal))
+                    {
+                        <p class="al-job-name">name: <code>@declaredName</code></p>
+                    }
+
+                    @if (job.Condition is { } condition)
+                    {
+                        <p class="al-job-condition">
+                            <span class="@ReportPresentation.TriClass(condition.Result)" aria-label="@($"condition is {ReportPresentation.TriLabel(condition.Result)}")">
+                                @ReportPresentation.TriLabel(condition.Result)
+                            </span>
+                            <code>@condition.EvaluatedAs</code>
+                            @if (condition.ImplicitSuccessApplied)
+                            {
+                                <span class="al-implicit" title="ActionLens added the status check GitHub adds to an if: that has none.">implicit success()</span>
+                            }
+                            @if (condition.Range.IsKnown)
+                            {
+                                <button type="button" class="al-jump" @onclick="() => Jump(condition.Range)"
+                                        aria-label="@($"Move the editor to the condition at line {condition.Range.Start.Line}, column {condition.Range.Start.Column}")">
+                                    line @condition.Range.Start.Line
+                                </button>
+                            }
+                        </p>
+                    }
+
+                    @if (job.Needs.Count > 0)
+                    {
+                        <p class="al-job-needs">
+                            needs:
+                            @foreach (NeedOutcome need in job.NeedsOutcomes)
+                            {
+                                <span class="al-need">@need.JobId = @ReportPresentation.OutcomeLabel(need.Outcome)</span>
+                            }
+                        </p>
+                    }
+
+                    @if (job.Matrix is { } matrix)
+                    {
+                        <p class="al-job-matrix">
+                            matrix: @string.Join(", ", matrix.Dimensions) ·
+                            @if (matrix.IsDynamic)
+                            {
+                                <span class="al-state al-state--unknown"><span aria-hidden="true">?</span> instances unknown</span>
+                            }
+                            else
+                            {
+                                <text>@matrix.CombinationCount combinations</text>
+                            }
+                            @if (matrix.Truncated)
+                            {
+                                <span class="al-truncated">truncated at the run cap</span>
+                            }
+                        </p>
+                    }
+
+                    @if (job.State == RunState.Unknown)
+                    {
+                        <div class="al-unknown" role="note">
+                            <strong>Unknown, not skipped.</strong>
+                            @if (job.Reason is { } reason)
+                            {
+                                <ul class="al-reason-list" role="list" aria-label="Why this is unknown">
+                                    <UnknownReasonTree Reason="reason" />
+                                </ul>
+                            }
+                            else
+                            {
+                                <p class="al-empty">The report gave an unknown without a reason, which is an ActionLens bug.</p>
+                            }
+                        </div>
+                    }
+
+                    @if (job.IsPinnedByScenario && job.ScenarioPin is { } pin)
+                    {
+                        <p class="al-job-pin">scenario pin: @pin</p>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    [Inject]
+    private AnalysisSession Session { get; set; } = default!;
+
+    private string counts
+    {
+        get
+        {
+            if (Session.Report is not { } report)
+            {
+                return string.Empty;
+            }
+
+            return $"{report.Totals.WillRun} run · {report.Totals.WillNotRun} not run · {report.Totals.UnknownJobs} unknown";
+        }
+    }
+
+    protected override void OnInitialized() => Session.Changed += OnChanged;
+
+    public void Dispose() => Session.Changed -= OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void Jump(ActionLens.Core.Text.SourceRange range) =>
+        Session.RequestJump(EditorTarget.Workflow, range, null);
+}

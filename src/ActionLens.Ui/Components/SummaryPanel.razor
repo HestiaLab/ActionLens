@@ -1,0 +1,141 @@
+@namespace ActionLens.Ui.Components
+@implements IDisposable
+@using ActionLens.Ui.Services
+@using ActionLens.Core.Expressions
+@using ActionLens.Core.Triggers
+
+<section class="al-panel al-summary" role="region" aria-label="Run summary">
+    <header class="al-panel-header">
+        <h2 class="al-panel-title">Run summary</h2>
+    </header>
+
+    @if (Session.Report is not { } report)
+    {
+        <p class="al-empty" role="status">No analysis yet.</p>
+    }
+    else
+    {
+        @if (report.IsBlocked)
+        {
+            <p class="al-banner al-banner--blocked" role="alert">
+                <strong>Blocked.</strong> A finding of error severity means the numbers below cannot be
+                trusted: @report.Totals.Errors error(s) and @report.Totals.Criticals critical(s) in the
+                diagnostics.
+            </p>
+        }
+
+        <dl class="al-summary-grid">
+            <div><dt>Workflow</dt><dd>@report.Workflow.Name</dd></div>
+            <div><dt>File</dt><dd>@(report.Workflow.FileName ?? "(unnamed)")</dd></div>
+            @* Description alone: the report's Label falls back to "default" whenever the caller did not name
+               the scenario, which is every scenario the top bar offers — so pairing them asserted the run
+               was the default even while the description said a job was skipped. *@
+            <div><dt>Scenario</dt><dd>@report.Scenario.Description</dd></div>
+            <div>
+                <dt>Jobs</dt>
+                <dd>
+                    <span class="al-state al-state--run"><span aria-hidden="true">+</span> @report.Totals.WillRun will run</span>
+                    <span class="al-state al-state--skip"><span aria-hidden="true">−</span> @report.Totals.WillNotRun will not</span>
+                    <span class="al-state al-state--unknown"><span aria-hidden="true">?</span> @report.Totals.UnknownJobs unknown</span>
+                </dd>
+            </div>
+            <div>
+                <dt>Instances</dt>
+                <dd>@(report.Totals.JobInstances is { } instances ? instances.ToString() : "unknown until a run expands the matrix")</dd>
+            </div>
+            <div><dt>Steps</dt><dd>@report.Totals.Steps</dd></div>
+            <div><dt>Findings</dt><dd>@report.Totals.Diagnostics</dd></div>
+        </dl>
+
+        <h3 class="al-subtitle">Did it trigger?</h3>
+        @if (report.Trigger.Verdict is not { } verdict)
+        {
+            <p class="al-empty">
+                @if (report.Trigger.Declared.Count > 0)
+                {
+                    <text>Picks declare @string.Join(", ", report.Trigger.Declared.Select(trigger => trigger.Name)). No event was selected, so there is no verdict to give.</text>
+                }
+                else
+                {
+                    <text>This file declares no triggers.</text>
+                }
+            </p>
+        }
+        else
+        {
+            <p class="al-verdict">
+                <span class="@ReportPresentation.TriClass(verdict.Runs.Kind)"
+                      aria-label="@($"{verdict.Event} is {ReportPresentation.TriLabel(verdict.Runs.Kind)}")">
+                    <span aria-hidden="true">@Marker(verdict.Runs.Kind)</span>
+                    @verdict.Event
+                </span>
+                <span class="al-verdict-answer">@Answer(verdict.Runs.Kind)</span>
+                @if (verdict.SaidNo is { } no)
+                {
+                    <span class="al-verdict-reason">
+                        @no.Filter rejected it@(@no.Pattern is { Length: > 0 } pattern ? $" — pattern “{pattern}”" : string.Empty).
+                    </span>
+                }
+                else if (verdict.SaidUnknown is { } unknown)
+                {
+                    <span class="al-verdict-reason">
+                        @unknown.Filter could not be decided@(@unknown.Note is { Length: > 0 } note ? $" — {note}" : string.Empty).
+                    </span>
+                }
+            </p>
+
+            @if (verdict.Runs.Kind == TriKind.Unknown && verdict.Runs.Reason is { } reason)
+            {
+                <ul class="al-reason-list" role="list" aria-label="Why the trigger answer is unknown">
+                    <UnknownReasonTree Reason="reason" />
+                </ul>
+            }
+
+            @if (verdict.Decisions.Count > 0)
+            {
+                <ul class="al-filter-list" role="list" aria-label="Filters consulted">
+                    @foreach (FilterDecision decision in verdict.Decisions)
+                    {
+                        <li role="listitem" class="al-filter">
+                            <span class="@ReportPresentation.TriClass(decision.Result)">@ReportPresentation.TriLabel(decision.Result)</span>
+                            <span class="al-filter-name">@decision.Filter</span>
+                            @if (decision.Value is { Length: > 0 } value)
+                            {
+                                <span class="al-filter-value">@value</span>
+                            }
+                            @if (decision.Note is { Length: > 0 } note)
+                            {
+                                <span class="al-filter-note">@note</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    }
+</section>
+
+@code {
+    [Inject]
+    private AnalysisSession Session { get; set; } = default!;
+
+    protected override void OnInitialized() => Session.Changed += OnChanged;
+
+    public void Dispose() => Session.Changed -= OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private static string Marker(TriKind kind) => kind switch
+    {
+        TriKind.True => "+",
+        TriKind.False => "−",
+        _ => "?",
+    };
+
+    private static string Answer(TriKind kind) => kind switch
+    {
+        TriKind.True => "would run for this event.",
+        TriKind.False => "would not run for this event.",
+        _ => "cannot be decided from the file and the payload supplied — that is not the same as “will not run”.",
+    };
+}

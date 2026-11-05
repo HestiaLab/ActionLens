@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>ActionLens — GitHub Actions preflight</title>
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <!-- Atlas chrome, in the order the shipped package documents: defaults, optional compact IDE look,
+         then ActionLens' own overrides last. The Ui stylesheet lives in the Razor class library and is
+         served under _content/ActionLens.Ui/. No <script> for Atlas: the host component imports
+         _content/Atlas.Blazor/atlas-v2/atlas.js itself. -->
+    <link rel="stylesheet" href="_content/Atlas.Blazor/atlas-v2/atlas.css" />
+    <link rel="stylesheet" href="_content/Atlas.Blazor/atlas-v2/themes/ide.css" />
+    <link rel="stylesheet" href="_content/ActionLens.Ui/css/app.css" />
+    <!-- Nothing here reaches the network: no font, script, style or telemetry from outside this app
+         (ADR 0003). The importmap is intentionally empty and stays as the assertion of that promise. -->
+    <script type="importmap"></script>
+</head>
+
+<body>
+    <div id="app">
+        <svg class="loading-progress" aria-hidden="true">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+
+</html>
