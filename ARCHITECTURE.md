@@ -129,7 +129,7 @@ checkout ([ADR 0001](docs/adr/0001-static-preflight-no-execution.md)).
 | Graph | cycles, missing `needs`, longest-path layering, determinism of the layout |
 | Scenarios | default versus modified scenario, with reasons asserted, not just values |
 | UI (component level) | bUnit in `ActionLens.Ui.Tests`, on the JS-degraded path via `StubEditorModule` |
-| UI (real browser) | Playwright — **Gate 2 work, not yet present**; see "Roadmap" below |
+| UI (real browser) | Playwright against real Chromium — boot without console errors and all assets 200, same-origin resources, caret/order/undo under CodeMirror, diagnostic jump, example swaps, editor remounting and interop recovery; green in Gate 2 CI |
 
 Errors are asserted as *positions and codes*, never as message text alone, so a reworded message cannot
 break a test that was really checking location.
@@ -143,13 +143,14 @@ a definite answer.
 ## Roadmap
 
 The order here is a decision record, not a promise of dates. Gate 1 passed 2026-11-04; Gate 2 is
-defined in `CHANGELOG.md` and is the condition for creating the public repository and the Pages
-deployment.
+defined in `CHANGELOG.md` and is green in real CI on `main`, `dev` and pull requests. Publishing
+remains a separate, explicit act.
 
-1. **Gate 2 (in progress)** — the contract regression cases, `DocFactsTests`, a minimal Playwright
-   suite (boot without console errors / all assets 200, resource hosts all same-origin, caret and undo
-   under real CodeMirror, diagnostic jump), and `.github/workflows/gate2.yml` to carry all of them.
-2. **After Gate 2 is green** — the public repository and the first Pages deployment. Not before.
+1. **Gate 2 (done)** — the contract regression cases, `DocFactsTests`, the Playwright suite and
+   `.github/workflows/gate2.yml` all green; both CI jobs pass on every `dev` push and pull request.
+   See `CHANGELOG.md` for the run IDs.
+2. **Publishing (not done)** — the first Pages deployment and the first release. A green Gate 2 does
+   not publish anything by itself.
 3. **Deferred, and recorded as such in `docs/limitations.md`** — URL sharing, autosave, language and
    theme switching, the matrix table, richer DAG interaction. These are not in `ADR 0003` any more;
    see that ADR's "Deferred" table.
