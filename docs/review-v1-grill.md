@@ -598,5 +598,7 @@ Core 项目此前没有手写 multi-file partial（仅 UI 的 Razor code-behind 
 
 ### 18.3 仍未做
 
-Pages 首次部署与首个 release、`dev` → `main` 评审 PR、ADR 0003 Deferred 的产品功能
-（Q2 已否决，须重开 ADR）。这三项都不是本地代码重构，按 Q5/F 的裁决不在此批伪造为已完成。
+Pages 首次部署与首个 release、ADR 0003 Deferred 的产品功能（Q2 已否决，须重开 ADR）仍未做，
+本批不伪造为已完成。`dev` → `main` 按当前约定**冻结**：所有提交经评审 PR 落到 `dev`，
+是否合并到 `main` 等其余任务解决后再决定，因此 `main` 仍停在初始提交 `2363021`。
+这属于发布与分支策略，不是本地代码重构。

@@ -15,6 +15,10 @@ repository is live at `HestiaLab/ActionLens`, with `dev` as the integration bran
 stable branch. Gate 1 passed 2026-11-04; **Gate 2** below is the condition for the first release and
 Pages deployment.
 
+All work currently lands on `dev` through reviewed pull requests. Merging `dev` into `main` is on hold
+until the remaining tasks below are resolved, and whether to do it at all is a decision for then;
+`main` therefore still sits at the initial commit.
+
 ### Gate 2 — the release gate
 
 Gate 2 is all of the following, run locally first and then in `.github/workflows/gate2.yml`:
@@ -38,7 +42,8 @@ All seven held in the first real CI run: `gate2` on `main` at `2363021`
 (run [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618), 2026-11-05,
 both `engine` and `browser` jobs green). Subsequent runs are also green: the `dev`-gating and Q6
 changes on PR #1 (runs `41981780325`, `41986150317`), and the first `push` to `dev` after that PR was
-merged at `f07a096` (run `41987481649`). No release, no Pages deployment and no "verified" claim
+merged at `f07a096` (run `41987481649`). Later `dev` pushes are green too, including the PR #3 merge
+at `9eecd18` (run `42157114755`). No release, no Pages deployment and no "verified" claim
 follows from a green run alone — publishing remains an explicit act. Gate 1's engine decision was
 never a release decision.
 
@@ -230,8 +235,10 @@ that previously either crashed (`INT001`) or silently dropped information.
 No URL sharing, autosave, language switching or theme switching yet — Language and Theme exist as disabled
 controls rather than fake ones; the other two have no control at all. No matrix table, no reusable-workflow
 or composite-action expansion, no step-output propagation, no cost or duration estimates (see
-`docs/limitations.md`). bUnit component tests run on the JS-degraded path via `StubEditorModule`; real
-CodeMirror, real interop and the Atlas host workspace still need the Gate 2 Playwright suite, and the
-manual browser gate remains in force until that suite is green.
+`docs/limitations.md`). bUnit component tests still run on the JS-degraded path via `StubEditorModule`,
+but real CodeMirror, real interop and the Atlas host workspace are covered by the Gate 2 Playwright
+suite in `.github/workflows/gate2.yml`. That suite is green, so the manual browser check is a spot
+check for user-visible changes no assertion names yet (see `CONTRIBUTING.md`), not a gate waiting to
+be opened.
 
 [Unreleased]: https://github.com/HestiaLab/ActionLens
