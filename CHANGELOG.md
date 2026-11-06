@@ -82,6 +82,28 @@ never a release decision.
   `docs/gate1-report.md`, `docs/w4-verification.md`, `docs/review-v1-grill.md`, `SECURITY.md`,
   `CONTRIBUTING.md`, and `docs/notes/atlas-0.4.0-api.md`.
 
+### Changed — four long files split into partials (2026-11-05)
+
+The last structural item from `docs/review-v1-grill.md` §17.3 was mechanical, and is now done.
+`WorkflowModelBuilder` (1444 lines), `TriggerEvaluator` (903), `ExpressionBodyParser` (757) and
+`AnalysisReportJson` (559) each became a small main file plus two or three `partial` parts, cut along
+section boundaries that were already marked in the source. No method body was edited; the main files
+keep the entry point, state and shared helpers, and visibility, signatures and the JSON export are
+unchanged. The new parts are `WorkflowModelBuilder.Triggers/Jobs/Strategy`,
+`TriggerEvaluator.Validation/Verdict/Helpers`,
+`ExpressionBodyParser.Expressions/Primaries/Tokens` and
+`AnalysisReportJson.Sections/Primitives`; the four main files are now 559 / 90 / 219 / 81 lines.
+
+Evidence that this is a move rather than a rewrite: all 11 part bodies (2699 lines) are byte-for-byte
+identical to their `HEAD` ranges (checked against `git show`), the four main files add exactly four
+lines in `git diff` — the `partial` modifiers — and the report bundle exported by
+`CrossProcessDeterminismTests`' probe is byte-identical before and after the split (217983 bytes,
+SHA256 `601C86B1…`). Apart from those four modifiers, the only edit is that
+`dotnet format analyzers --diagnostics IDE0005` removed the now-unused `using` directives from each
+part; with `EnforceCodeStyleInBuild`, leaving them in place is a build error. Gates after the split:
+build 0/0, format 0, Core 1430/1430, Ui 25/25, Playwright 8/8. No assertion was added, weakened or
+removed, and the test counts are unchanged — a pure move should not change them.
+
 ### Changed — one public entry point (2026-11-05)
 
 Decision F asked for a narrower public surface; §7 recorded roughly 55 of 60 Core files exposing a
@@ -106,9 +128,8 @@ cannot place and emits an `INT001` diagnostic per unknown id instead of throwing
 result. `ScenarioEngineMismatchTests` reproduces the mismatch and an A/B check confirms it fails
 again when the guard is removed.
 
-Splitting the long files (`WorkflowModelBuilder`, `TriggerEvaluator`, `ExpressionBodyParser`,
-`AnalysisReportJson`) is mechanical and remains for a later batch. Pages deployment and the first
-release are still explicit, unperformed acts.
+Splitting the four long files was the next mechanical batch; see the "four long files split into
+partials" entry. Pages deployment and the first release are still explicit, unperformed acts.
 
 ### Changed — Q6 second batch: shared conversions and CI currency (2026-11-05)
 
