@@ -460,6 +460,8 @@ Ui 24 → 25（`WorkspaceRenderTests`）；Playwright 6 → 8（DOM 身份保护
 > 第二批结构重构已解锁；后者已由 §16 完成去重与 CI 技术债部分。
 > **仍待执行**：`dev` → `main` 评审 PR、Pages 首次部署与首个 release、§16 明确留下的
 > 「收窄 public 面 / 拆超长文件」，以及 ADR 0003 Deferred 的产品功能（Q2 已否决，须重开 ADR）。
+> **后续状态（2026-11-05 续四、续五）**：「收窄 public 面」见 §17、「拆超长文件」见 §18，两项已完成；
+> 本行其余三项仍未执行。
 
 ---
 
@@ -549,3 +551,52 @@ graph 会抛 `KeyNotFoundException`。本轮写了
 ADR 0003 Deferred 产品功能（Q2 已否决）同样未动。
 
 **复测**：构建 0/0 · 格式 0 · Core **1430** · Ui 25 · Playwright **8 / 8**。
+
+> **状态更新（2026-11-05 续五）**：拆超长文件已由 §18 完成；本段其余两项仍未动。
+
+---
+
+## 18. 拆超长文件（2026-11-05 续五）
+
+§17.3 把四个超长文件的拆分标为「纯机械重构，独立于 API 决策，留到下一批」，本批执行。
+依据是先核结构再动手：四个文件都是 file-scoped namespace 的单一类型、原本没有 `partial`，
+分区已经由 `// -----` 注释划好（`WorkflowModelBuilder` 7 段、`TriggerEvaluator` 2 段、
+`AnalysisReportJson` 2 段；`ExpressionBodyParser` 没有分区注释，按方法组与其 XML 文档注释边界切）。
+Core 项目此前没有手写 multi-file partial（仅 UI 的 Razor code-behind 有），这次是第一次；
+项目用 SDK 默认 `**/*.cs` glob，不需要改 csproj。
+
+### 18.1 做法：按行剪切，不改一行方法体
+
+用一次性脚本按现有分区边界整段搬移（用完即删），主文件只保留入口、状态字段与共享助手：
+
+| 主文件（原 → 现） | 分片（搬走的代码行数） |
+|---|---|
+| `WorkflowModelBuilder.cs` 1444 → 559 | `.Triggers.cs` 243、`.Jobs.cs` 368、`.Strategy.cs` 271 |
+| `TriggerEvaluator.cs` 903 → 90 | `.Validation.cs` 158、`.Verdict.cs` 534、`.Helpers.cs` 118 |
+| `ExpressionBodyParser.cs` 757 → 219 | `.Expressions.cs` 124、`.Primaries.cs` 345、`.Tokens.cs` 66 |
+| `AnalysisReportJson.cs` 559 → 81 | `.Sections.cs` 378、`.Primitives.cs` 94 |
+
+合计搬走 2699 行。四个声明加 `partial`，修饰符与可见性不变（`internal sealed` / `public static`），
+`Entry` / `Dimension` / `CallShape` 等嵌套类型随各自分组走。除这四个修饰符外唯一的改动是
+`using`：分片最初复制了主文件的全部 using，`EnforceCodeStyleInBuild` 把 IDE0005 变成 error
+（构建报 23 处），于是用 `dotnet format analyzers --diagnostics IDE0005` 精确删掉各分片不再需要的
+那几行，没有手工猜哪些该留。
+
+### 18.2 证据：这是搬移，不是重写
+
+- 生成脚本断言「行守恒」：原文件里除声明行外的每一行，在拆分后的主文件与分片中各出现一次，
+  允许丢弃的只有分区之间的空行。
+- 脚本的 `--verify` 独立于生成过程，从 `git show HEAD:<file>` 取原始 blob，把 11 个分片的 body
+  与各自 HEAD 行区间逐行比对，全部相同（243+368+271+158+534+118+124+345+66+378+94 = 2699 行）。
+- `git diff --numstat` 里四个主文件合计只有 **4 行新增**（正是 `partial` 修饰符）、2718 行删除
+  （搬走的段 + 多余 using），没有任何方法体被改写。
+- 行为 A/B：拆分前后各用 `CrossProcessDeterminismTests` 的导出探针生成一份报告 bundle
+  （3 个 fixture、多种 payload / scenario、多键 matrix），两份 **217983 字节逐字节相同**
+  （SHA256 `601C86B1…`）。
+- 全套门：构建 0/0 · 格式 0 · Core **1430 / 1430** · Ui **25 / 25** · Playwright **8 / 8**。
+  没有新增、放宽或删除任何断言，测试数量与 §17 完全一致——纯机械重构本就不该改变测试数量。
+
+### 18.3 仍未做
+
+Pages 首次部署与首个 release、`dev` → `main` 评审 PR、ADR 0003 Deferred 的产品功能
+（Q2 已否决，须重开 ADR）。这三项都不是本地代码重构，按 Q5/F 的裁决不在此批伪造为已完成。

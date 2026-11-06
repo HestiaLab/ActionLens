@@ -153,5 +153,8 @@ deployment.
 3. **Deferred, and recorded as such in `docs/limitations.md`** — URL sharing, autosave, language and
    theme switching, the matrix table, richer DAG interaction. These are not in `ADR 0003` any more;
    see that ADR's "Deferred" table.
-4. **Structural cleanup, after the functional freeze** — the 1400-line `WorkflowModelBuilder`, the
-   duplicated Levenshtein / JSON-to-value conversions, and the wider-than-intended public API surface.
+4. **Structural cleanup, after the functional freeze** — done in three batches: the duplicated
+   Levenshtein / JSON-to-value conversions were folded into shared helpers, the public surface was
+   narrowed to the 15 contract types, and the four longest Core files were split into partials
+   (`docs/review-v1-grill.md` §§16–18). What remains is not structural: the first Pages deployment
+   and the first release are still explicit, unperformed acts.
