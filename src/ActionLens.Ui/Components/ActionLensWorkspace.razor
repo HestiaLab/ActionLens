@@ -44,49 +44,37 @@
 
             <ContentRoutes>
                 <AtlasContentRoute Kind="@ActionLensContentKinds.Workflow">
-                    <ChildContent Context="content">
-                        <CodeEditor @ref="_workflowEditor"
-                                    Text="@Session.WorkflowText"
-                                    Language="yaml"
-                                    AriaLabel="Workflow YAML"
-                                    SurfaceLabel="workflow editor"
-                                    OnTextChanged="OnWorkflowTextChanged" />
-                    </ChildContent>
+                    <CodeEditor @ref="_workflowEditor"
+                                Text="@Session.WorkflowText"
+                                Language="yaml"
+                                AriaLabel="Workflow YAML"
+                                SurfaceLabel="workflow editor"
+                                OnTextChanged="OnWorkflowTextChanged" />
                 </AtlasContentRoute>
 
                 <AtlasContentRoute Kind="@ActionLensContentKinds.Payload">
-                    <ChildContent Context="content">
-                        <CodeEditor @ref="_payloadEditor"
-                                    Text="@Session.PayloadText"
-                                    Language="json"
-                                    AriaLabel="Event payload JSON"
-                                    SurfaceLabel="payload editor"
-                                    OnTextChanged="OnPayloadTextChanged" />
-                    </ChildContent>
+                    <CodeEditor @ref="_payloadEditor"
+                                Text="@Session.PayloadText"
+                                Language="json"
+                                AriaLabel="Event payload JSON"
+                                SurfaceLabel="payload editor"
+                                OnTextChanged="OnPayloadTextChanged" />
                 </AtlasContentRoute>
 
                 <AtlasContentRoute Kind="@ActionLensContentKinds.Canvas">
-                    <ChildContent Context="content">
-                        <CanvasPanel />
-                    </ChildContent>
+                    <CanvasPanel />
                 </AtlasContentRoute>
 
                 <AtlasContentRoute Kind="@ActionLensContentKinds.Inspector">
-                    <ChildContent Context="content">
-                        <InspectorPanel />
-                    </ChildContent>
+                    <InspectorPanel />
                 </AtlasContentRoute>
 
                 <AtlasContentRoute Kind="@ActionLensContentKinds.Diagnostics">
-                    <ChildContent Context="content">
-                        <DiagnosticsPanel @ref="_diagnosticsPanel" />
-                    </ChildContent>
+                    <DiagnosticsPanel @ref="_diagnosticsPanel" />
                 </AtlasContentRoute>
 
                 <AtlasContentRoute Kind="@ActionLensContentKinds.Summary">
-                    <ChildContent Context="content">
-                        <SummaryPanel />
-                    </ChildContent>
+                    <SummaryPanel />
                 </AtlasContentRoute>
             </ContentRoutes>
 
