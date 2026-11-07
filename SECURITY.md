@@ -17,8 +17,9 @@ The local-first promise is enforced rather than asserted: `LocalFirstGuardTests`
 `ActionLens.Core.Tests` (not a build step) that fails when the UI sources, the Node scripts or a
 stylesheet construct a network client or reference an asset on another host. It matches code, not prose,
 and both halves of it have their own self-test so a scan that silently matches nothing cannot pass.
-The browser-level assertion is a Gate 2 Playwright case, still outstanding; the source guard alone
-cannot prove that no request left the page.
+The browser-level assertion is the Gate 2 Playwright case "every resource request stays on the same
+origin" (`tests/e2e/boot-and-network.spec.ts`), green in CI; the source guard alone cannot prove that
+no request left the page, which is why both halves exist.
 
 ## Hostile-input bounds
 
