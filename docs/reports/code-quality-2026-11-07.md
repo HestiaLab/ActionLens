@@ -10,17 +10,19 @@
 
 ## 整体评分
 
-| 维度 | 评级 | 一句话结论 |
-|---|---|---|
-| 1. 复杂度 | **B** | 少数方法偏长（最大 195 行），但全部有文档说明且复杂度源于问题域本身 |
-| 2. 重复代码 | **B+** | 仅轻度重复：FilterDecision 构造与 unknown 传播样板，无大规模克隆 |
-| 3. 死代码 | **A** | 启发式命中经逐一核实全部为误报，未发现确认的死代码 |
-| 4. 安全 | **A** | 无硬编码秘密、无 XSS 面、敌意输入有界且全部转化为带定位的诊断 |
-| 5. 依赖 | **A** | Core 仅依赖 YamlDotNet；中央包管理、版本钉死、分层单向由项目图强制 |
-| 6. 测试覆盖 | **A-** | 1455 个单元/组件测试全绿 + 语料回归 + 确定性测试；App 宿主层仅靠 e2e 间接覆盖 |
-| 7. 编码规范 | **A** | 0 个公共可变字段；XML 文档 pervasive；TreatWarningsAsErrors + format 硬门禁 |
+| 维度 | 评级 | 修复后 | 一句话结论 |
+|---|---|---|---|
+| 1. 复杂度 | **B** | **B+** | 三个长方法已拆分（Scan 195→155、Expand 126→12、ParsePrimaryWithPostfix 136→42），剩余为词法/解析常规形态 |
+| 2. 重复代码 | **B+** | B+ | 仅轻度重复：FilterDecision 构造与 unknown 传播样板，无大规模克隆（P3 未动） |
+| 3. 死代码 | **A** | A | 启发式命中经逐一核实全部为误报，未发现确认的死代码 |
+| 4. 安全 | **A** | A | 无硬编码秘密、无 XSS 面、敌意输入有界；SECURITY.md 过时断言已修正 |
+| 5. 依赖 | **A** | A | Core 仅依赖 YamlDotNet；中央包管理、版本钉死、分层单向由项目图强制 |
+| 6. 测试覆盖 | **A-** | **A** | 1476 个测试全绿（Core 1430 + Ui 38 + App 8）；EditorModule 与两个纯函数服务缺口已补 |
+| 7. 编码规范 | **A** | A | 0 个公共可变字段；XML 文档 pervasive；TreatWarningsAsErrors + format 硬门禁 |
 
-**综合：A-**。这是一个工程质量显著高于平均水平的项目：架构边界（Core 纯引擎 / Ui 可 bUnit / App 薄宿主）由项目引用强制，"绝不抛出、绝不联网、unknown 必带理由"三条产品契约都有对应的可执行测试。剩余问题集中在少数长方法、轻度样板重复和一处过时文档。
+**综合：A-**（修复后 **A**）。这是一个工程质量显著高于平均水平的项目：架构边界（Core 纯引擎 / Ui 可 bUnit / App 薄宿主）由项目引用强制，"绝不抛出、绝不联网、unknown 必带理由"三条产品契约都有对应的可执行测试。剩余问题集中在少数长方法、轻度样板重复和一处过时文档。
+
+> **2026-11-07 修复执行**：P1/P2 全部 6 项已按[修复计划](code-quality-plan-2026-11-07.md)在分支 `refactor/quality-plan-2026-11` 落地，独立复核确认行为保持，详见附录 D。
 
 ---
 
@@ -98,6 +100,8 @@
 
 **实测（2026-11-07 本地）**: Core **1430 通过**（296 个 `[Fact]/[Theory]` 方法，Theory 展开含 1003 条 GitHub 官方表达式语料），Ui bUnit **25 通过**，0 失败。另有 Playwright 8 用例（boot/网络 3、诊断跳转 1、编辑器互操作 1、键入 3）在 Gate 2 CI 绿。
 
+> **修复后复测（同日）**: Core 1430 + Ui **38**（+13）+ App **8**（新增项目）= **1476 全绿**。下表 6.1 / 6.2 缺口已闭合。
+
 覆盖亮点：错误断言"定位+码"而非消息文本；跨进程确定性测试；契约回归（INT001 输入集）；LocalFirstGuard 带自检防止扫描空转。
 
 启发式映射（测试文本引用源类名）显示 48/90 源文件被直接引用，未引用文件中绝大多数是 partial 分片、简单数据记录或经集成路径间接覆盖（如 `JobGraphAnalyzer` 经 `JobGraph.Build` 被 [JobGraphTests.cs](../../tests/ActionLens.Core.Tests/Graph/JobGraphTests.cs) 覆盖）。真实缺口：
@@ -120,18 +124,18 @@
 
 ## 改进优先级
 
-| 优先级 | # | 事项 | 建议动作 |
-|---|---|---|---|
-| 🔴 P0 | — | 无 | 未发现崩溃、数据丢失或安全漏洞级问题 |
-| 🟠 P1 | 6.1 | EditorModule 并发/处置分支无直接测试 | 为 `GetAsync` 共享导入、disposed 后返回 null 补单元测试（可 stub IJSRuntime） |
-| 🟠 P1 | 4.1 | SECURITY.md 过时断言 | 将 "still outstanding" 更新为指向 boot-and-network.spec.ts 的已完成状态 |
-| 🟡 P2 | 1.1 | YamlSafetyScanner.Scan 195 行 | 提取 184–224 行裁决段为 `BuildVerdict(...)` |
-| 🟡 P2 | 1.2 | MatrixExpander.Expand 126 行 | 按守卫拆私有方法（动态/空值/上限各一段） |
-| 🟡 P2 | 1.5 | ParsePrimaryWithPostfix 136 行 | 后缀链分发拆分 |
-| 🟡 P2 | 6.2 | GraphGeometry / ReportPresentation | 补纯函数单元测试 |
-| 🟢 P3 | 2.1–2.3 | FilterDecision / unknown 传播样板 | 触碰时顺手提取辅助方法 |
-| 🟢 P3 | 7.1 | editor.ts 双重断言 | 重构 Held 初始化顺序 |
-| 🟢 P3 | 7.2 | seed 脚本硬编码本机路径 | 已有环境变量覆盖；可将回退源改为相对探测或纯环境变量驱动 |
+| 优先级 | # | 事项 | 建议动作 | 状态 |
+|---|---|---|---|---|
+| 🔴 P0 | — | 无 | 未发现崩溃、数据丢失或安全漏洞级问题 | — |
+| 🟠 P1 | 6.1 | EditorModule 并发/处置分支无直接测试 | 新建 App.Tests，8 个用例 + Gate 2 接入 | ✅ 已修复（acfeeb2） |
+| 🟠 P1 | 4.1 | SECURITY.md 过时断言 | 更新为指向 boot-and-network.spec.ts 的已完成状态 | ✅ 已修复（5b9532d） |
+| 🟡 P2 | 1.1 | YamlSafetyScanner.Scan 195 行 | 提取裁决段为 BuildVerdict | ✅ 已修复（baa6f52） |
+| 🟡 P2 | 1.2 | MatrixExpander.Expand 126 行 | 拆为 5 个命名守卫方法 | ✅ 已修复（b2ea583） |
+| 🟡 P2 | 1.5 | ParsePrimaryWithPostfix 136 行 | 后缀链拆为 3 个方法 | ✅ 已修复（8f4a26f） |
+| 🟡 P2 | 6.2 | GraphGeometry / ReportPresentation | 补 13 个纯函数单元测试 | ✅ 已修复（de9d7f6） |
+| 🟢 P3 | 2.1–2.3 | FilterDecision / unknown 传播样板 | 触碰时顺手提取辅助方法 | ⬜ 未动（计划内遗留） |
+| 🟢 P3 | 7.1 | editor.ts 双重断言 | 重构 Held 初始化顺序 | ⬜ 未动（计划内遗留） |
+| 🟢 P3 | 7.2 | seed 脚本硬编码本机路径 | 已有环境变量覆盖；可将回退源改为相对探测或纯环境变量驱动 | ⬜ 未动（计划内遗留） |
 
 ## 附录 A：文件统计（wc -l 实测）
 
@@ -232,3 +236,45 @@
 | 安全完整性 | 第二遍独立扫描未发现遗漏 |
 | 统计自洽 | 误差率 0% |
 | 处置 | 偏差 <5%，直接修正，无需第二轮复核 |
+
+## 附录 D：修复执行记录（2026-11-07）
+
+**分支**: `refactor/quality-plan-2026-11`（自 `dev` e8fa936 切出）
+**复核**: 独立子代理逐 Phase 读源码 + diff 核对，6/6 落地且行为保持，无语义漂移
+
+### D.1 变更清单
+
+| Commit | Phase | 内容 |
+|---|---|---|
+| 3400a3d | — | 审查报告与修复计划入库 |
+| 5b9532d | B | SECURITY.md 浏览器级断言改为已完成状态 |
+| acfeeb2 | A | 新建 ActionLens.App.Tests（8 用例 + 手写 IJSRuntime stub），sln 与 gate2.yml 接入 |
+| de9d7f6 / 2884d86 | F | GraphGeometryTests 7 用例 + ReportPresentationTests 6 用例（后一提交补末尾换行） |
+| baa6f52 | C | YamlSafetyScanner 裁决段提取为 BuildVerdict（纯移动，+15/-0） |
+| b2ea583 | D | MatrixExpander.Expand 拆为 5 个命名守卫方法 |
+| 8f4a26f | E | ParsePrimaryWithPostfix 拆为 3 个后缀方法（CA1859 要求 ParsePostfixArguments 返回 FunctionCallNode?） |
+
+### D.2 验证结果
+
+| 项 | 结果 |
+|---|---|
+| `dotnet build` | 0 警告 0 错误 |
+| `dotnet format --verify-no-changes` | 通过 |
+| Core 套件 | 1430 / 1430（重构前后计数不变） |
+| Ui 套件 | 38 / 38（25 + 13 新增） |
+| App 套件 | 8 / 8（新增） |
+| Playwright | 本地未重跑；gate2.yml 已含 App.Tests 步骤，待 PR 上 CI 确认 |
+
+### D.3 关键指标变化
+
+| 指标 | 修复前 | 修复后 |
+|---|---|---|
+| YamlSafetyScanner.Scan | 195 行 | 155 行 |
+| MatrixExpander.Expand | 126 行 | 12 行（编排） |
+| ParsePrimaryWithPostfix | 136 行 | 42 行（目标 ≤40，为保持失败路径语义未再压缩） |
+| 测试总数（单元/组件） | 1455 | 1476 |
+| 测试项目 | 2 | 3 |
+
+### D.4 遗留
+
+P3 三项（样板重复、editor.ts 双重断言、seed 脚本本机路径）按计划遗留，触碰相关代码时顺手处理。
