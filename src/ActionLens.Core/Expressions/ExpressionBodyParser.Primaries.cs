@@ -22,118 +22,19 @@ internal sealed partial class ExpressionBodyParser
         var charged = 0;
         while (!_aborted)
         {
-            var token = Current;
-            switch (token.Kind)
+            switch (Current.Kind)
             {
                 case ExpressionTokenKind.Dot:
-                    {
-                        if (!EnterLevel())
-                        {
-                            return null;
-                        }
-
-                        charged++;
-                        _index++;
-                        var member = Current;
-                        if (member.Kind == ExpressionTokenKind.Star)
-                        {
-                            _index++;
-                            target = new WildcardAccessNode(
-                                target,
-                                new SourceRange(target.Range.Start, member.Range.End));
-                            break;
-                        }
-
-                        if (member.Kind != ExpressionTokenKind.Name)
-                        {
-                            return FailHere(
-                                "Expected a name after '.'.",
-                                "'github.' has no member; drop the dot, name the member, or write '.*' for every member.");
-                        }
-
-                        if (Peek(1).Kind is ExpressionTokenKind.OpenArguments or ExpressionTokenKind.LeftParen)
-                        {
-                            return Fail(
-                                $"'{member.Text}()' cannot be called: Actions calls functions by name only.",
-                                member.Range,
-                                "There is no method call on a context value.");
-                        }
-
-                        _index++;
-                        target = new MemberAccessNode(
-                            target,
-                            member.Text,
-                            new SourceRange(target.Range.Start, member.Range.End));
-                        break;
-                    }
+                    target = ParsePostfixMember(target, ref charged);
+                    break;
 
                 case ExpressionTokenKind.LeftBracket:
-                    {
-                        if (!EnterLevel())
-                        {
-                            return null;
-                        }
-
-                        charged++;
-                        _index++;
-                        if (Current.Kind == ExpressionTokenKind.Star)
-                        {
-                            // `a[*]` is the other spelling of `a.*`, so it builds the same node; only the
-                            // closing bracket makes it an index-shaped token sequence.
-                            _index++;
-                            if (Current.Kind != ExpressionTokenKind.RightBracket)
-                            {
-                                return FailHere("Expected ']' to close the index.", null);
-                            }
-
-                            var starClose = Current;
-                            _index++;
-                            target = new WildcardAccessNode(
-                                target,
-                                new SourceRange(target.Range.Start, starClose.Range.End));
-                            break;
-                        }
-
-                        var index = ParseOperand("an index expression", "a ']'");
-                        if (index is null)
-                        {
-                            return null;
-                        }
-
-                        if (Current.Kind != ExpressionTokenKind.RightBracket)
-                        {
-                            return FailHere("Expected ']' to close the index.", null);
-                        }
-
-                        var close = Current;
-                        _index++;
-                        target = new IndexAccessNode(
-                            target,
-                            index,
-                            new SourceRange(target.Range.Start, close.Range.End));
-                        break;
-                    }
+                    target = ParsePostfixIndex(target, ref charged);
+                    break;
 
                 case ExpressionTokenKind.OpenArguments when target is FunctionCallNode call:
-                    {
-                        if (!EnterLevel())
-                        {
-                            return null;
-                        }
-
-                        charged++;
-                        var arguments = ParseArguments(call.Name, call.Range.Start);
-                        if (arguments is null)
-                        {
-                            return null;
-                        }
-
-                        target = new FunctionCallNode(
-                            call.Name,
-                            arguments.Value.Arguments,
-                            new SourceRange(call.Range.Start, arguments.Value.CloseEnd));
-                        break;
-                    }
+                    target = ParsePostfixArguments(call, ref charged);
+                    break;
 
                 default:
                     for (var i = 0; i < charged; i++)
@@ -143,9 +44,126 @@ internal sealed partial class ExpressionBodyParser
 
                     return target;
             }
+
+            if (target is null)
+            {
+                return null;
+            }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// One <c>.</c> link: a named member or the <c>.*</c> wildcard. The charge is taken as soon as the
+    /// level is entered, and only the caller's default branch gives the levels back — a failed link
+    /// returns null without exiting, exactly as the inline loop did.
+    /// </summary>
+    private ExpressionNode? ParsePostfixMember(ExpressionNode target, ref int charged)
+    {
+        if (!EnterLevel())
+        {
+            return null;
+        }
+
+        charged++;
+        _index++;
+        var member = Current;
+        if (member.Kind == ExpressionTokenKind.Star)
+        {
+            _index++;
+            return new WildcardAccessNode(
+                target,
+                new SourceRange(target.Range.Start, member.Range.End));
+        }
+
+        if (member.Kind != ExpressionTokenKind.Name)
+        {
+            return FailHere(
+                "Expected a name after '.'.",
+                "'github.' has no member; drop the dot, name the member, or write '.*' for every member.");
+        }
+
+        if (Peek(1).Kind is ExpressionTokenKind.OpenArguments or ExpressionTokenKind.LeftParen)
+        {
+            return Fail(
+                $"'{member.Text}()' cannot be called: Actions calls functions by name only.",
+                member.Range,
+                "There is no method call on a context value.");
+        }
+
+        _index++;
+        return new MemberAccessNode(
+            target,
+            member.Text,
+            new SourceRange(target.Range.Start, member.Range.End));
+    }
+
+    /// <summary>One <c>[ ]</c> link: an index expression, or <c>[*]</c> which is the other spelling of <c>.*</c>.</summary>
+    private ExpressionNode? ParsePostfixIndex(ExpressionNode target, ref int charged)
+    {
+        if (!EnterLevel())
+        {
+            return null;
+        }
+
+        charged++;
+        _index++;
+        if (Current.Kind == ExpressionTokenKind.Star)
+        {
+            // `a[*]` is the other spelling of `a.*`, so it builds the same node; only the
+            // closing bracket makes it an index-shaped token sequence.
+            _index++;
+            if (Current.Kind != ExpressionTokenKind.RightBracket)
+            {
+                return FailHere("Expected ']' to close the index.", null);
+            }
+
+            var starClose = Current;
+            _index++;
+            return new WildcardAccessNode(
+                target,
+                new SourceRange(target.Range.Start, starClose.Range.End));
+        }
+
+        var index = ParseOperand("an index expression", "a ']'");
+        if (index is null)
+        {
+            return null;
+        }
+
+        if (Current.Kind != ExpressionTokenKind.RightBracket)
+        {
+            return FailHere("Expected ']' to close the index.", null);
+        }
+
+        var close = Current;
+        _index++;
+        return new IndexAccessNode(
+            target,
+            index,
+            new SourceRange(target.Range.Start, close.Range.End));
+    }
+
+    /// <summary>A continued argument list, which only a function-call target can accept.</summary>
+    private FunctionCallNode? ParsePostfixArguments(FunctionCallNode call, ref int charged)
+    {
+        if (!EnterLevel())
+        {
+            return null;
+        }
+
+        charged++;
+        var arguments = ParseArguments(call.Name, call.Range.Start);
+        if (arguments is null)
+        {
+            return null;
+        }
+
+        return new FunctionCallNode(
+            call.Name,
+            arguments.Value.Arguments,
+            new SourceRange(call.Range.Start, arguments.Value.CloseEnd));
     }
 
     /// <summary>
