@@ -25,3 +25,4 @@ src/ActionLens.App/wwwroot/js/dist/
 .qoder-credits/
 *.swp
 .DS_Store
+scripts/offline-sources.local.json
