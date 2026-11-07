@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using ActionLens.Core.Text;
 using ActionLens.Core.Values;
 
 namespace ActionLens.Core.Expressions;
@@ -51,6 +52,18 @@ public sealed class ExpressionEvaluator
     /// <summary>Coerces the result to a condition, keeping the reason when the value is unknown.</summary>
     public TriValue EvaluateCondition(ExpressionNode node) => Evaluate(node).ToCondition();
 
+    /// <summary>
+    /// Evaluates one operand and, when it is unknown, wraps the reason as a propagation through the
+    /// enclosing expression — the shape every link and operator shares.
+    /// </summary>
+    private Evaluated EvaluateOrPropagate(ExpressionNode operand, string text, SourceRange range)
+    {
+        var value = Evaluate(operand);
+        return value.IsKnown
+            ? value
+            : Evaluated.Unknown(UnknownReason.Propagating(text, range, value.Reason!));
+    }
+
     // ---------------------------------------------------------------- paths
 
     private Evaluated ResolveContext(ContextNode node)
@@ -67,11 +80,10 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateMember(MemberAccessNode node)
     {
-        var target = Evaluate(node.Target);
+        var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
         if (!target.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(
-                ExpressionTreeText.Render(node), node.Range, target.Reason!));
+            return target;
         }
 
         var value = target.Value!;
@@ -95,18 +107,16 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateIndex(IndexAccessNode node)
     {
-        var target = Evaluate(node.Target);
+        var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
         if (!target.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(
-                ExpressionTreeText.Render(node), node.Range, target.Reason!));
+            return target;
         }
 
-        var index = Evaluate(node.Index);
+        var index = EvaluateOrPropagate(node.Index, "index", node.Range);
         if (!index.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(
-                "index", node.Range, index.Reason!));
+            return index;
         }
 
         var value = target.Value!;
@@ -132,11 +142,10 @@ public sealed class ExpressionEvaluator
     /// </summary>
     private Evaluated EvaluateWildcard(WildcardAccessNode node)
     {
-        var target = Evaluate(node.Target);
+        var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
         if (!target.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(
-                ExpressionTreeText.Render(node), node.Range, target.Reason!));
+            return target;
         }
 
         var value = target.Value!;
@@ -193,10 +202,10 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateNot(UnaryNotNode node)
     {
-        var operand = Evaluate(node.Operand);
+        var operand = EvaluateOrPropagate(node.Operand, "!", node.Range);
         if (!operand.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating("!", node.Range, operand.Reason!));
+            return operand;
         }
 
         return Evaluated.Known(GitHubValue.FromBoolean(!operand.Value!.IsTruthy()));
@@ -255,16 +264,16 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateComparison(ComparisonNode node)
     {
-        var left = Evaluate(node.Left);
+        var left = EvaluateOrPropagate(node.Left, OperatorText(node.Operator), node.Range);
         if (!left.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(OperatorText(node.Operator), node.Range, left.Reason!));
+            return left;
         }
 
-        var right = Evaluate(node.Right);
+        var right = EvaluateOrPropagate(node.Right, OperatorText(node.Operator), node.Range);
         if (!right.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(OperatorText(node.Operator), node.Range, right.Reason!));
+            return right;
         }
 
         var sameInstance = ReferenceEquals(left.Value, right.Value);
