@@ -16,12 +16,12 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const targetRoot = path.join(repoRoot, 'node_modules');
 
 // Trees to read from, searched in order for each package. ACTIONLENS_JS_SOURCE, when set, is searched
-// first and is the supported way to point this script at a mirror on another machine.
-const sources = [
-  process.env.ACTIONLENS_JS_SOURCE,
-  String.raw`C:\Users\World\.dsh\profiles\desktop\node_modules`,
-  String.raw`C:\Users\World\AppData\Local\hermes\hermes-agent\node_modules`,
-].filter(Boolean);
+// first and is the supported way to point this script at a mirror on another machine. Further trees
+// come from scripts/offline-sources.local.json — a gitignored JSON array of absolute node_modules
+// paths — so machine-specific locations stay out of the repository.
+const localConfig = path.join(repoRoot, 'scripts', 'offline-sources.local.json');
+const localSources = existsSync(localConfig) ? JSON.parse(readFileSync(localConfig, 'utf8')) : [];
+const sources = [process.env.ACTIONLENS_JS_SOURCE, ...localSources].filter(Boolean);
 
 const manifest = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 const wanted = { ...(manifest.dependencies ?? {}), ...(manifest.devDependencies ?? {}) };

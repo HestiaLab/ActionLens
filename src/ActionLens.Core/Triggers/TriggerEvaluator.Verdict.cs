@@ -27,16 +27,7 @@ public static partial class TriggerEvaluator
                 Note = $"'on:' declares no '{eventName}' event, so nothing in this file can be triggered by it.",
             });
 
-            return new TriggerVerdict
-            {
-                Event = eventName,
-                Source = source,
-                PayloadEventName = payload.EventName,
-                OccurrencePinnedByPayload = pinned,
-                Range = range,
-                Runs = TriValue.False,
-                Decisions = decisions,
-            };
+            return Verdict(TriValue.False);
         }
 
         var dimensions = new List<Dimension>();
@@ -49,26 +40,20 @@ public static partial class TriggerEvaluator
         {
             // GitHub's own limit, not the file's patterns, decides the run here, so no filter answer about
             // this event can be given honestly — not even a "no" from a branch filter.
-            return new TriggerVerdict
-            {
-                Event = eventName,
-                Source = source,
-                PayloadEventName = payload.EventName,
-                OccurrencePinnedByPayload = pinned,
-                Range = range,
-                Runs = dominating.Value,
-                Decisions = decisions,
-            };
+            return Verdict(dominating.Value);
         }
 
-        return new TriggerVerdict
+        return Verdict(And(dimensions, decisions, trigger.Range));
+
+        // Every exit carries the same identity fields; only the answer differs.
+        TriggerVerdict Verdict(TriValue runs) => new()
         {
             Event = eventName,
             Source = source,
             PayloadEventName = payload.EventName,
             OccurrencePinnedByPayload = pinned,
             Range = range,
-            Runs = And(dimensions, decisions, trigger.Range),
+            Runs = runs,
             Decisions = decisions,
         };
 
@@ -144,15 +129,7 @@ public static partial class TriggerEvaluator
 
         // The clock and the person are both supplied facts, so a caller can pin them; naming the missing
         // input is what makes the unknown actionable rather than a shrug.
-        decisions.Add(new FilterDecision
-        {
-            Filter = isDispatch ? "inputs" : "schedule",
-            Result = TriKind.Unknown,
-            Pattern = declared,
-            PatternRange = declaredRange,
-            Note = reason.Message,
-            Reason = reason,
-        });
+        decisions.Add(UnknownDecision(isDispatch ? "inputs" : "schedule", reason, declared, declaredRange));
         return new Dimension(TriValue.Unknown(reason), false);
     }
 
@@ -170,16 +147,7 @@ public static partial class TriggerEvaluator
                 UnknownReasonKind.ValueMissing,
                 $"The payload does not say which activity type the event was. '{first.Text}' and the rest of 'types' cannot be decided without 'action' in the event payload.",
                 first.Range);
-            decisions.Add(new FilterDecision
-            {
-                Filter = "types",
-                Mode = FilterListMode.Include,
-                Result = TriKind.Unknown,
-                Pattern = Join(trigger.Types),
-                PatternRange = first.Range,
-                Note = reason.Message,
-                Reason = reason,
-            });
+            decisions.Add(UnknownDecision("types", reason, Join(trigger.Types), first.Range, FilterListMode.Include));
             return new Dimension(TriValue.Unknown(reason), false);
         }
 
@@ -271,15 +239,7 @@ public static partial class TriggerEvaluator
                     UnknownReasonKind.ValueMissing,
                     $"The payload gives no 'ref', so ActionLens cannot tell whether this push touched a branch or a tag, and the '{kindName}' filter reads only one of the two.",
                     patternRange);
-                decisions.Add(new FilterDecision
-                {
-                    Filter = hasBranches ? "branches" : "tags",
-                    Result = TriKind.Unknown,
-                    Pattern = Join(values),
-                    PatternRange = patternRange,
-                    Note = reason.Message,
-                    Reason = reason,
-                });
+                decisions.Add(UnknownDecision(hasBranches ? "branches" : "tags", reason, Join(values), patternRange));
                 return new Dimension(TriValue.Unknown(reason), false);
             }
 
@@ -385,16 +345,7 @@ public static partial class TriggerEvaluator
                 UnknownReasonKind.ValueMissing,
                 $"The payload supplies no list of changed files, so '{key}' cannot be decided.{stated} Add \"changed_files\": [\"path/one\"] to the payload.",
                 first.Range);
-            decisions.Add(new FilterDecision
-            {
-                Filter = key,
-                Mode = mode,
-                Result = TriKind.Unknown,
-                Pattern = Join(values),
-                PatternRange = first.Range,
-                Note = reason.Message,
-                Reason = reason,
-            });
+            decisions.Add(UnknownDecision(key, reason, Join(values), first.Range, mode));
             return new Dimension(TriValue.Unknown(reason), false);
         }
 
@@ -425,17 +376,10 @@ public static partial class TriggerEvaluator
                 UnknownReasonKind.RuntimeFunction,
                 $"The changed-files list was assembled from the payload's per-commit arrays, which a webhook body caps at 20 commits, so ActionLens cannot rule out the cases where GitHub runs the workflow whatever '{key}' says. On the partial list of {files.Count:N0} files the match was {(match.Satisfied ? "found" : "not found")}.",
                 deciding.Range);
-            decisions.Add(new FilterDecision
+            decisions.Add(UnknownDecision(key, partial, deciding.RawText, deciding.Range, mode) with
             {
-                Filter = key,
-                Mode = mode,
-                Result = TriKind.Unknown,
                 Value = match.Value,
                 ValuesTested = files.Count,
-                Pattern = deciding.RawText,
-                PatternRange = deciding.Range,
-                Note = partial.Message,
-                Reason = partial,
             });
             return new Dimension(TriValue.Unknown(partial), Dominates: true);
         }
@@ -466,16 +410,9 @@ public static partial class TriggerEvaluator
         string message)
     {
         var reason = new UnknownReason(UnknownReasonKind.RuntimeFunction, message, first.Range);
-        decisions.Add(new FilterDecision
+        decisions.Add(UnknownDecision(key, reason, Join(values), first.Range, mode) with
         {
-            Filter = key,
-            Mode = mode,
-            Result = TriKind.Unknown,
             ValuesTested = payload.ChangedFiles?.Count ?? payload.ChangedFileCount ?? 0,
-            Pattern = Join(values),
-            PatternRange = first.Range,
-            Note = reason.Message,
-            Reason = reason,
         });
         return new Dimension(TriValue.Unknown(reason), Dominates: true);
     }
@@ -505,16 +442,7 @@ public static partial class TriggerEvaluator
                 UnknownReasonKind.ValueMissing,
                 $"The payload names no {kindLabel} to match against. '{name}' cannot be decided without {missingHint}.",
                 first.Range);
-            decisions.Add(new FilterDecision
-            {
-                Filter = name,
-                Mode = mode,
-                Result = TriKind.Unknown,
-                Pattern = Join(patterns),
-                PatternRange = first.Range,
-                Note = reason.Message,
-                Reason = reason,
-            });
+            decisions.Add(UnknownDecision(name, reason, Join(patterns), first.Range, mode));
             return new Dimension(TriValue.Unknown(reason), false);
         }
 
