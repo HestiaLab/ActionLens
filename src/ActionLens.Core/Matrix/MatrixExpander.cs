@@ -119,10 +119,23 @@ public static class MatrixExpander
     public static MatrixExpansion Expand(StrategySection? strategy, MatrixSection? matrix, SourceRange fallbackRange)
     {
         var diagnostics = new List<Diagnostic>();
+        NoteUnmodelledScheduling(strategy, fallbackRange, diagnostics);
+        if (matrix is null)
+        {
+            return MatrixExpansion.NoMatrix with { Diagnostics = diagnostics };
+        }
 
-        // fail-fast and max-parallel decide cancellation and scheduling once a run is under way. Reading
-        // the keys and then dropping them would let the report look complete while silently ignoring
-        // part of the file, so say plainly that they are outside the model.
+        return RejectDynamic(matrix, fallbackRange, diagnostics)
+            ?? ExpandStatic(matrix, fallbackRange, diagnostics);
+    }
+
+    /// <summary>
+    /// fail-fast and max-parallel decide cancellation and scheduling once a run is under way. Reading
+    /// the keys and then dropping them would let the report look complete while silently ignoring
+    /// part of the file, so say plainly that they are outside the model.
+    /// </summary>
+    private static void NoteUnmodelledScheduling(StrategySection? strategy, SourceRange fallbackRange, List<Diagnostic> diagnostics)
+    {
         if (strategy is { FailFast: false } || strategy?.MaxParallel is not null)
         {
             var key = strategy?.MaxParallel is not null ? "max-parallel" : "fail-fast";
@@ -137,75 +150,50 @@ public static class MatrixExpander
                 Suggestion = "Read this key as a runtime concern; the job counts above are for the default scenario.",
             });
         }
+    }
 
-        if (matrix is null)
-        {
-            return MatrixExpansion.NoMatrix with { Diagnostics = diagnostics };
-        }
-
+    /// <summary>
+    /// A dimension fed by an expression refuses the whole expansion: a partial product would be a
+    /// subset of the truth with a wrong count, which is worse than saying nothing.
+    /// </summary>
+    private static MatrixExpansion? RejectDynamic(MatrixSection matrix, SourceRange fallbackRange, List<Diagnostic> diagnostics)
+    {
         var dynamicDimensions = matrix.Dimensions.Where(dimension => dimension.Values is null).ToArray();
-        if (dynamicDimensions.Length > 0)
+        if (dynamicDimensions.Length == 0)
         {
-            foreach (var dimension in dynamicDimensions)
-            {
-                diagnostics.Add(new Diagnostic
-                {
-                    Code = DiagnosticCodes.MatrixDynamic,
-                    Severity = DiagnosticSeverity.Warning,
-                    Stage = DiagnosticStage.Matrix,
-                    Message = $"The matrix dimension '{dimension.Name}' is resolved at runtime.",
-                    Range = dimension.Range.IsKnown ? dimension.Range : fallbackRange,
-                    Suggestion = "Paste the JSON the producing job will output to see the combinations; ActionLens will not guess them.",
-                });
-            }
-
-            // A partial product would be a subset of the truth with a wrong count, which is worse than
-            // saying nothing.
-            return new MatrixExpansion
-            {
-                Combinations = Array.Empty<MatrixCombination>(),
-                IsDynamic = true,
-                DynamicDimensions = dynamicDimensions.Select(dimension => dimension.Name).ToArray(),
-                Diagnostics = diagnostics,
-            };
+            return null;
         }
 
-        foreach (var dimension in matrix.Dimensions.Where(entry => entry.Values is { Count: 0 }))
+        foreach (var dimension in dynamicDimensions)
         {
             diagnostics.Add(new Diagnostic
             {
-                Code = DiagnosticCodes.MatrixValueInvalid,
+                Code = DiagnosticCodes.MatrixDynamic,
                 Severity = DiagnosticSeverity.Warning,
                 Stage = DiagnosticStage.Matrix,
-                Message = $"The matrix dimension '{dimension.Name}' has no values, so this job expands to nothing.",
+                Message = $"The matrix dimension '{dimension.Name}' is resolved at runtime.",
                 Range = dimension.Range.IsKnown ? dimension.Range : fallbackRange,
-                Suggestion = $"Add at least one value under '{dimension.Name}:'.",
+                Suggestion = "Paste the JSON the producing job will output to see the combinations; ActionLens will not guess them.",
             });
         }
 
-        var variables = new HashSet<string>(matrix.Dimensions.Select(dimension => dimension.Name), StringComparer.OrdinalIgnoreCase);
-        var estimated = EstimatedProduct(matrix.Dimensions);
-        if (estimated > MaxGeneratedCombinations)
+        return new MatrixExpansion
         {
-            // A prefix with a confident-looking count is a guess, which is worse than saying nothing.
-            // Refuse the expansion before allocating a single CombinationBuilder, as the dynamic
-            // dimension case does.
-            diagnostics.Add(new Diagnostic
-            {
-                Code = DiagnosticCodes.MatrixCapReached,
-                Severity = DiagnosticSeverity.Error,
-                Stage = DiagnosticStage.Matrix,
-                Message = $"The matrix dimensions multiply to {estimated} combinations, far above the {MaxCombinations} Actions allows and the {MaxGeneratedCombinations} ActionLens will materialise. No combinations were expanded.",
-                Range = matrix.Sources.Get("matrix").IsKnown ? matrix.Sources.Get("matrix") : fallbackRange,
-                Suggestion = "Reduce the number of values per dimension, or split the work across jobs.",
-            });
-            return new MatrixExpansion
-            {
-                Combinations = Array.Empty<MatrixCombination>(),
-                Truncated = true,
-                ProducedCount = 0,
-                Diagnostics = diagnostics,
-            };
+            Combinations = Array.Empty<MatrixCombination>(),
+            IsDynamic = true,
+            DynamicDimensions = dynamicDimensions.Select(dimension => dimension.Name).ToArray(),
+            Diagnostics = diagnostics,
+        };
+    }
+
+    private static MatrixExpansion ExpandStatic(MatrixSection matrix, SourceRange fallbackRange, List<Diagnostic> diagnostics)
+    {
+        NoteEmptyDimensions(matrix, fallbackRange, diagnostics);
+
+        var variables = new HashSet<string>(matrix.Dimensions.Select(dimension => dimension.Name), StringComparer.OrdinalIgnoreCase);
+        if (RejectOversizedProduct(matrix, fallbackRange, diagnostics) is { } rejected)
+        {
+            return rejected;
         }
 
         var working = CrossProduct(matrix.Dimensions);
@@ -239,6 +227,53 @@ public static class MatrixExpander
             Combinations = kept.Select((builder, index) => builder.ToCombination(index)).ToArray(),
             Truncated = truncated,
             ProducedCount = produced,
+            Diagnostics = diagnostics,
+        };
+    }
+
+    private static void NoteEmptyDimensions(MatrixSection matrix, SourceRange fallbackRange, List<Diagnostic> diagnostics)
+    {
+        foreach (var dimension in matrix.Dimensions.Where(entry => entry.Values is { Count: 0 }))
+        {
+            diagnostics.Add(new Diagnostic
+            {
+                Code = DiagnosticCodes.MatrixValueInvalid,
+                Severity = DiagnosticSeverity.Warning,
+                Stage = DiagnosticStage.Matrix,
+                Message = $"The matrix dimension '{dimension.Name}' has no values, so this job expands to nothing.",
+                Range = dimension.Range.IsKnown ? dimension.Range : fallbackRange,
+                Suggestion = $"Add at least one value under '{dimension.Name}:'.",
+            });
+        }
+    }
+
+    /// <summary>
+    /// A prefix with a confident-looking count is a guess, which is worse than saying nothing.
+    /// Refuse the expansion before allocating a single CombinationBuilder, as the dynamic
+    /// dimension case does.
+    /// </summary>
+    private static MatrixExpansion? RejectOversizedProduct(MatrixSection matrix, SourceRange fallbackRange, List<Diagnostic> diagnostics)
+    {
+        var estimated = EstimatedProduct(matrix.Dimensions);
+        if (estimated <= MaxGeneratedCombinations)
+        {
+            return null;
+        }
+
+        diagnostics.Add(new Diagnostic
+        {
+            Code = DiagnosticCodes.MatrixCapReached,
+            Severity = DiagnosticSeverity.Error,
+            Stage = DiagnosticStage.Matrix,
+            Message = $"The matrix dimensions multiply to {estimated} combinations, far above the {MaxCombinations} Actions allows and the {MaxGeneratedCombinations} ActionLens will materialise. No combinations were expanded.",
+            Range = matrix.Sources.Get("matrix").IsKnown ? matrix.Sources.Get("matrix") : fallbackRange,
+            Suggestion = "Reduce the number of values per dimension, or split the work across jobs.",
+        });
+        return new MatrixExpansion
+        {
+            Combinations = Array.Empty<MatrixCombination>(),
+            Truncated = true,
+            ProducedCount = 0,
             Diagnostics = diagnostics,
         };
     }

@@ -1,9 +1,9 @@
 # Gate 2 — the release gate for ActionLens
 #
 # This is the executable form of the seven criteria in CHANGELOG.md ("Gate 2 — the release gate").
-# It is deliberately strict: TreatWarningsAsErrors is on, `dotnet format` is a hard gate, both xUnit
-# v3 / Microsoft.Testing.Platform assemblies run as executables (dotnet test is not supported on this
-# SDK), and the Playwright suite drives a real Chromium against the real WASM host.
+# It is deliberately strict: TreatWarningsAsErrors is on, `dotnet format` is a hard gate, all three
+# xUnit v3 / Microsoft.Testing.Platform assemblies run as executables (dotnet test is not supported on
+# this SDK), and the Playwright suite drives a real Chromium against the real WASM host.
 #
 # Both integration branches are gated: day-to-day commits land on `dev`, and `main` is the stable
 # branch they are merged into. A commit on either one runs the same checks.
@@ -66,6 +66,9 @@ jobs:
 
       - name: bUnit component tests
         run: dotnet tests/ActionLens.Ui.Tests/bin/Debug/net10.0/ActionLens.Ui.Tests.dll
+
+      - name: Host editor-module tests
+        run: dotnet tests/ActionLens.App.Tests/bin/Debug/net10.0/ActionLens.App.Tests.dll
 
   browser:
     name: Playwright (real Chromium)
