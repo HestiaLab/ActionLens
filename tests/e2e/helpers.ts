@@ -13,7 +13,10 @@ export function watchPage(page: Page) {
   const resourceEntries: PerformanceEntry[] = [];
 
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() === 'error') {
+      const url = message.location().url;
+      consoleErrors.push(url.length > 0 ? `${message.text()} (${url})` : message.text());
+    }
   });
   page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
   page.on('requestfailed', (request) =>
