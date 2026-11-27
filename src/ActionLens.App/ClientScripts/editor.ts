@@ -8,7 +8,6 @@ import {
   EditorState,
   StateEffect,
   StateField,
-  type DecorationSet,
   type Extension,
 } from '@codemirror/state';
 import {
@@ -21,6 +20,7 @@ import {
   drawSelection,
   dropCursor,
   rectangularSelection,
+  type DecorationSet,
   type ViewUpdate,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -65,7 +65,7 @@ const revealField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(decorations, transaction) {
     let current = transaction.docChanged
-      ? decorations.map(transaction.changes, transaction.newDoc)
+      ? decorations.map(transaction.changes)
       : decorations;
 
     for (const effect of transaction.effects) {
@@ -168,7 +168,9 @@ export function attach(element: HTMLElement, options: EditorOptions, dotNet: Dot
 
   try {
     const language = new Compartment();
-    const held: Held = { view: null as unknown as EditorView, language, programmatic: false, observer: null as unknown as ResizeObserver, closed: false };
+    // Assigned after the view exists; the update listener only fires on transactions, which cannot
+    // happen before construction finishes, so the closure never sees it unassigned.
+    let held: Held;
 
     const state = EditorState.create({
       doc: options.doc ?? '',
@@ -190,9 +192,10 @@ export function attach(element: HTMLElement, options: EditorOptions, dotNet: Dot
       ],
     });
 
-    held.view = new EditorView({ state, parent: element });
-    held.observer = new ResizeObserver(() => held.view.requestMeasure());
-    held.observer.observe(element);
+    const view = new EditorView({ state, parent: element });
+    const observer = new ResizeObserver(() => view.requestMeasure());
+    observer.observe(element);
+    held = { view, language, programmatic: false, observer, closed: false };
     views.set(element, held);
     return true;
   } catch {

@@ -57,6 +57,26 @@ public static partial class TriggerEvaluator
         string.Join(", ", values.Select(value => value.Text));
 
     /// <summary>
+    /// An unknown decision keeps its reason in both the reader's note and the reason tree, so the two
+    /// cannot drift apart. Callers with extra facts (a value, a count) add them with <c>with</c>.
+    /// </summary>
+    private static FilterDecision UnknownDecision(
+        string filter,
+        UnknownReason reason,
+        string? pattern,
+        SourceRange patternRange,
+        FilterListMode mode = default) => new()
+        {
+            Filter = filter,
+            Mode = mode,
+            Result = TriKind.Unknown,
+            Pattern = pattern,
+            PatternRange = patternRange,
+            Note = reason.Message,
+            Reason = reason,
+        };
+
+    /// <summary>
     /// The patterns a filter key actually declares. An author is allowed to write only the
     /// <c>-ignore</c> half, so the include list is not necessarily the one holding the values.
     /// </summary>

@@ -13,7 +13,7 @@
 | 维度 | 评级 | 修复后 | 一句话结论 |
 |---|---|---|---|
 | 1. 复杂度 | **B** | **B+** | 三个长方法已拆分（Scan 195→155、Expand 126→12、ParsePrimaryWithPostfix 136→42），剩余为词法/解析常规形态 |
-| 2. 重复代码 | **B+** | B+ | 仅轻度重复：FilterDecision 构造与 unknown 传播样板，无大规模克隆（P3 未动） |
+| 2. 重复代码 | **B+** | **A-** | FilterDecision/TriggerVerdict/unknown 传播样板已收敛为辅助方法，剩余为对象初始化器风格的自然结果 |
 | 3. 死代码 | **A** | A | 启发式命中经逐一核实全部为误报，未发现确认的死代码 |
 | 4. 安全 | **A** | A | 无硬编码秘密、无 XSS 面、敌意输入有界；SECURITY.md 过时断言已修正 |
 | 5. 依赖 | **A** | A | Core 仅依赖 YamlDotNet；中央包管理、版本钉死、分层单向由项目图强制 |
@@ -133,9 +133,9 @@
 | 🟡 P2 | 1.2 | MatrixExpander.Expand 126 行 | 拆为 5 个命名守卫方法 | ✅ 已修复（b2ea583） |
 | 🟡 P2 | 1.5 | ParsePrimaryWithPostfix 136 行 | 后缀链拆为 3 个方法 | ✅ 已修复（8f4a26f） |
 | 🟡 P2 | 6.2 | GraphGeometry / ReportPresentation | 补 13 个纯函数单元测试 | ✅ 已修复（de9d7f6） |
-| 🟢 P3 | 2.1–2.3 | FilterDecision / unknown 传播样板 | 触碰时顺手提取辅助方法 | ⬜ 未动（计划内遗留） |
-| 🟢 P3 | 7.1 | editor.ts 双重断言 | 重构 Held 初始化顺序 | ⬜ 未动（计划内遗留） |
-| 🟢 P3 | 7.2 | seed 脚本硬编码本机路径 | 已有环境变量覆盖；可将回退源改为相对探测或纯环境变量驱动 | ⬜ 未动（计划内遗留） |
+| 🟢 P3 | 2.1–2.3 | FilterDecision / unknown 传播样板 | 触碰时顺手提取辅助方法 | ✅ 已修复（1b9af44 / fc55f36） |
+| 🟢 P3 | 7.1 | editor.ts 双重断言 | 重构 Held 初始化顺序 | ✅ 已修复（4887131） |
+| 🟢 P3 | 7.2 | seed 脚本硬编码本机路径 | 已有环境变量覆盖；可将回退源改为相对探测或纯环境变量驱动 | ✅ 已修复（1c5a995） |
 
 ## 附录 A：文件统计（wc -l 实测）
 
@@ -278,3 +278,16 @@
 ### D.4 遗留
 
 P3 三项（样板重复、editor.ts 双重断言、seed 脚本本机路径）按计划遗留，触碰相关代码时顺手处理。
+
+### D.5 P3 收尾（同日，分支 `refactor/quality-p3-cleanup`）
+
+| Commit | 项 | 内容 |
+|---|---|---|
+| 1b9af44 | 2.1/2.3 | `UnknownDecision` 统一 7 处 unknown 决策构造；`EvaluateEvent` 三出口共用 `Verdict` 局部函数 |
+| fc55f36 | 2.2 | `EvaluateOrPropagate` 统一 7 处传播构造（短路逻辑与函数参数的条件传播形状不同，保持原样） |
+| 4887131 | 7.1 | editor.ts `Held` 改为构造完成后一次性赋值；顺带修正验证中发现的两处既有类型错误（`DecorationSet` 导入源、`RangeSet.map` 多余参数） |
+| 1c5a995 | 7.2 | seed 离线源改为环境变量 + gitignored `scripts/offline-sources.local.json`，搜索顺序与版本拒绝行为保持 |
+
+**验证**: Core 1430 + Ui 38 + App 8 全绿；Release 构建 0 错误；`dotnet format` 通过；editor.ts `tsc --strict` 干净；Playwright **8/8**（Release 服务器，含互操作恢复与重挂载用例）。
+
+**环境备注**: ① 本机 Visual Studio 锁住 App 的 Debug 输出 DLL，Debug 全量构建报 MSB3027 文件锁错误（非代码问题），Release 构建与 e2e 均正常；② seed 脚本的离线源树版本已漂移（hermes 树 playwright 1.62.1 vs 钉版 1.64.1），原版脚本同样拒绝——仓库 node_modules 已是正确版本，不受影响。
