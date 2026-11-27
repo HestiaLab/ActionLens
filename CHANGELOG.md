@@ -10,9 +10,13 @@ per release.
 
 ## [Unreleased]
 
-Nothing is released yet. The repository is being developed locally; there is no published package,
-container image or hosted deployment. Gate 1 passed 2026-11-04; **Gate 2** is the condition below for
-creating the public repository (`HestiaLab/ActionLens`, Apache-2.0) and the first Pages deployment.
+Nothing is released yet — no published package, container image or hosted Pages deployment. The source
+repository is live at `HestiaLab/ActionLens`, with `dev` as the integration branch and `main` as the
+stable branch. Gate 1 passed 2026-11-04; **Gate 2** below is the condition for the first release and
+Pages deployment.
+
+All work currently lands on `dev` through reviewed pull requests. `main` is the stable branch and has
+passed Gate 2; no release or Pages deployment has been performed yet.
 
 ### Gate 2 — the release gate
 
@@ -20,7 +24,7 @@ Gate 2 is all of the following, run locally first and then in `.github/workflows
 
 1. `dotnet build ActionLens.sln -v q --nologo` → 0 errors, 0 warnings.
 2. `dotnet format ActionLens.sln --verify-no-changes` → exit code 0.
-3. Both xUnit v3 / Microsoft.Testing.Platform assemblies green (run the built `.exe` files directly,
+3. All three xUnit v3 / Microsoft.Testing.Platform assemblies green (run the built `.exe` files directly,
    see `CONTRIBUTING.md`; `dotnet test` is not supported on this SDK).
 4. `DocFactsTests` green: corpus shape, Markdown links and ADR/deferred consistency.
 5. The whole Playwright suite green: boot without console errors and all assets 200, resource hosts all
@@ -33,11 +37,40 @@ Gate 2 is all of the following, run locally first and then in `.github/workflows
    byte-identical exports, and session notifications that do not change the document do not re-render
    the shell.
 
-Until all seven hold, no public repository, no Pages deployment and no "verified" claim. Gate 1's engine
-decision was never a release decision.
+All seven held in the first real CI run: `gate2` on `main` at `2363021`
+(run [`41977057618`](https://github.com/HestiaLab/ActionLens/actions/runs/41977057618), 2026-11-05,
+both `engine` and `browser` jobs green). Subsequent runs are also green: the `dev`-gating and Q6
+changes on PR #1 (runs `41981780325`, `41986150317`), and the first `push` to `dev` after that PR was
+merged at `f07a096` (run `41987481649`). Later `dev` pushes are green too, including the PR #3 merge
+at `9eecd18` (run `42157114755`). No release, no Pages deployment and no "verified" claim
+follows from a green run alone — publishing remains an explicit act. Gate 1's engine decision was
+never a release decision.
+
+### Fixed — correctness, lifecycle and verification gaps (2026-11-27)
+
+- Preserved member-level `unknown` for declared env values, including whole-env reads, instead of turning
+  missing runtime data into `null` and a definite false condition.
+- Corrected composite `<=` / `>=` identity semantics, matrix `include` / `exclude` through merge keys,
+  filter-budget exhaustion (`unknown` instead of a definite non-match), and AL003 coverage for
+  event-derived `github.ref`.
+- Kept late CodeMirror attaches from surviving component disposal, bound diagnostic jumps to the document
+  revision and actual cursor position, routed payload diagnostics to the payload editor, and stabilized
+  scenario selection across job removal and reordering.
+- Restored portable clean installs by locking every esbuild platform package, added the editor build script
+  and lockfile to MSBuild incremental inputs, and strengthened Playwright assertions for diagnostic lines
+  and analysis-time network silence.
+- Corrected stale Gate 2, test-command, deferred-ADR and public-surface documentation.
+- Narrowed Core to an exact 41-type public contract allowlist, added repository-wide LF attributes, and
+  supplied the development-only CodeMirror lint types required by `lang-json` declarations.
+- Declared the existing PNG favicon so Linux Chromium no longer requests a missing `/favicon.ico`, and
+  included resource URLs in browser-test console diagnostics.
+- Ran the Playwright web server in Production without a launch profile and explicitly disabled the
+  development-only Browser Tools hot-reload endpoint, avoiding its Linux 404 without weakening console checks.
 
 ### Added
 
+- Diagnostic exports now name the source document (`workflow` or `event-payload`), so payload ranges stay
+  interpretable outside the UI.
 - `ActionLens.Core`, pure C# with no Blazor, JS interop or network dependency:
   - two-pass YAML reading — a token-level safety pass bounding size, documents, anchors, nesting depth and
     duplicate keys, then the object graph with 1-based line/column positions and YAML 1.1 type resolution
@@ -75,6 +108,77 @@ decision was never a release decision.
 - Documentation: `ARCHITECTURE.md`, `docs/expression-semantics.md`, `docs/limitations.md`, four ADRs,
   `docs/gate1-report.md`, `docs/w4-verification.md`, `docs/review-v1-grill.md`, `SECURITY.md`,
   `CONTRIBUTING.md`, and `docs/notes/atlas-0.4.0-api.md`.
+
+### Changed — four long files split into partials (2026-11-05)
+
+The last structural item from `docs/review-v1-grill.md` §17.3 was mechanical, and is now done.
+`WorkflowModelBuilder` (1444 lines), `TriggerEvaluator` (903), `ExpressionBodyParser` (757) and
+`AnalysisReportJson` (559) each became a small main file plus two or three `partial` parts, cut along
+section boundaries that were already marked in the source. No method body was edited; the main files
+keep the entry point, state and shared helpers, and visibility, signatures and the JSON export are
+unchanged. The new parts are `WorkflowModelBuilder.Triggers/Jobs/Strategy`,
+`TriggerEvaluator.Validation/Verdict/Helpers`,
+`ExpressionBodyParser.Expressions/Primaries/Tokens` and
+`AnalysisReportJson.Sections/Primitives`; the four main files are now 559 / 90 / 219 / 81 lines.
+
+Evidence that this is a move rather than a rewrite: all 11 part bodies (2699 lines) are byte-for-byte
+identical to their `HEAD` ranges (checked against `git show`), the four main files add exactly four
+lines in `git diff` — the `partial` modifiers — and the report bundle exported by
+`CrossProcessDeterminismTests`' probe is byte-identical before and after the split (217983 bytes,
+SHA256 `601C86B1…`). Apart from those four modifiers, the only edit is that
+`dotnet format analyzers --diagnostics IDE0005` removed the now-unused `using` directives from each
+part; with `EnforceCodeStyleInBuild`, leaving them in place is a build error. Gates after the split:
+build 0/0, format 0, Core 1430/1430, Ui 25/25, Playwright 8/8. No assertion was added, weakened or
+removed, and the test counts are unchanged — a pure move should not change them.
+
+### Changed — one public entry point (2026-11-05)
+
+Decision F asked for a narrower public surface; §7 recorded roughly 55 of 60 Core files exposing a
+public type. The boundary was determined by the compiler, not by guesswork: 41 candidate types never
+named outside Core were made `internal`, and every type the compiler rejected (CS0050/51/53/60,
+because a public signature references it) was restored. Three iterations converged.
+
+- 27 types are now internal: `ScenarioEngine`, `LintEngine`, the eight lint rule implementations,
+  `ScenarioEvaluation`/`JobScenarioResult`, `ConditionEvaluator`, `ExpressionFunctions`, expression
+  node subtypes, `EvaluationScope` and friends.
+- 15 stayed public in that pass because they *are* consumed contract types: `ExpressionNode`,
+  `ILintRule`, the lint result types, `MatrixCombination`/`MatrixRun`,
+  `JobGraphEdge`/`JobGraphAnalysisResult`, `StepDefinition`, `DefaultsSection`, `ConcurrencySection`,
+  `WorkflowInput`, `TemplateSegment`. This was a narrowing decision, not an exhaustive export allowlist.
+- `PublicSurfaceTests` (11 assertions) pins the boundary against a future "just make it public" edit;
+  the compiler already enforces the opposite direction.
+
+This also fixed a real defect §7 had only flagged by inspection. `ScenarioEngine.Run` took the
+workflow and the job graph as two independent arguments and indexed `_jobs[jobId]` directly, so a
+caller supplying a graph built from a different document got a raw `KeyNotFoundException`. Making the
+engine internal removes that path for external callers; inside, `ScenarioRunner` now filters ids it
+cannot place and emits an `INT001` diagnostic per unknown id instead of throwing or inventing a
+result. `ScenarioEngineMismatchTests` reproduces the mismatch and an A/B check confirms it fails
+again when the guard is removed.
+
+Splitting the four long files was the next mechanical batch; see the "four long files split into
+partials" entry. Pages deployment and the first release are still explicit, unperformed acts.
+
+### Changed — Q6 second batch: shared conversions and CI currency (2026-11-05)
+
+Gate 2 went green in CI, unlocking the post-gate structural work (decision F). Reviewing the code
+corrected two claims in `docs/review-v1-grill.md` §7: there are **two** Levenshtein copies, not three
+(the third is a positional hint heuristic with different behaviour), and **two** JSON→value copies, not
+three (the third converts YAML, which needs scalar resolution and source positions).
+
+- `Text/EditDistance.cs` and `Values/JsonValueConverter.cs` are `internal`, not `public`: they were
+  introduced as public by mistake, widening the surface decision F asks to narrow. A
+  `SharedHelpers_AreNotPartOfThePublicApi` assertion guards against a regression.
+- `Text/EditDistance.cs` now owns `LevenshteinIgnoreCase`; `JobGraphAnalyzer` and `RunnerLabelTypoRule`
+  call it instead of carrying their own copies. The `WorkflowModelBuilder` heuristic stays separate,
+  with a comment explaining why sharing it would change the suggestion a reader sees.
+- `Values/JsonValueConverter.cs` now owns the JSON→`GitHubValue` mapping used by both `fromJSON()` and
+  the event payload reader. The "the two must agree" comment in `AnalysisInput.cs` is now enforced by
+  structure rather than by discipline. Seven new assertions in `SharedConvertersTests` pin the mapping.
+- CI: runner pinned to `ubuntu-24.04`; `checkout`/`setup-dotnet`/`setup-node` → v5 and
+  `upload-artifact` → v6 (first Node-24 stable majors), removing both runner annotations.
+- Narrowing the public surface and splitting the ~1400-line builder are **not** in this batch: those
+  change API visibility and need their own decision.
 
 ### Added — determinism, render narrowing and interop recovery (2026-11-05)
 
@@ -154,8 +258,10 @@ that previously either crashed (`INT001`) or silently dropped information.
 No URL sharing, autosave, language switching or theme switching yet — Language and Theme exist as disabled
 controls rather than fake ones; the other two have no control at all. No matrix table, no reusable-workflow
 or composite-action expansion, no step-output propagation, no cost or duration estimates (see
-`docs/limitations.md`). bUnit component tests run on the JS-degraded path via `StubEditorModule`; real
-CodeMirror, real interop and the Atlas host workspace still need the Gate 2 Playwright suite, and the
-manual browser gate remains in force until that suite is green.
+`docs/limitations.md`). bUnit component tests still run on the JS-degraded path via `StubEditorModule`,
+but real CodeMirror, real interop and the Atlas host workspace are covered by the Gate 2 Playwright
+suite in `.github/workflows/gate2.yml`. That suite is green, so the manual browser check is a spot
+check for user-visible changes no assertion names yet (see `CONTRIBUTING.md`), not a gate waiting to
+be opened.
 
 [Unreleased]: https://github.com/HestiaLab/ActionLens

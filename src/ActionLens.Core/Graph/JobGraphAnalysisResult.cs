@@ -7,7 +7,7 @@ namespace ActionLens.Core.Graph;
 /// be trusted. There is no way to get a <see cref="JobGraph"/> without its diagnostics, so a caller
 /// cannot accidentally show a layout while hiding the cycle behind it.
 /// </summary>
-public sealed record JobGraphAnalysisResult
+internal sealed record JobGraphAnalysisResult
 {
     public required JobGraph Graph { get; init; }
 

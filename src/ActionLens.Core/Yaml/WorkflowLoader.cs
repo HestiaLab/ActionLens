@@ -8,7 +8,7 @@ using YamlDotNet.RepresentationModel;
 namespace ActionLens.Core.Yaml;
 
 /// <summary>What reading a workflow produced: a model, diagnostics, or both.</summary>
-public sealed record WorkflowLoadResult
+internal sealed record WorkflowLoadResult
 {
     public required IReadOnlyList<Diagnostic> Diagnostics { get; init; }
 
@@ -28,7 +28,7 @@ public sealed record WorkflowLoadResult
 /// first, then the object graph and schema walk. Both passes answer with positioned diagnostics, so
 /// malformed, hostile or merely invalid input still produces an explanation instead of an exception.
 /// </summary>
-public sealed class WorkflowLoader
+internal sealed class WorkflowLoader
 {
     /// <summary>The size ceiling ActionLens accepts for one workflow file.</summary>
     public const int MaxInputBytes = 1_048_576;

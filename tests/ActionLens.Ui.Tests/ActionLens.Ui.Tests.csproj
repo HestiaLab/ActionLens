@@ -11,8 +11,8 @@
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- xUnit v3 runs on Microsoft.Testing.Platform; the .NET 10 SDK only supports VSTest
-         through this opt-in, so 'dotnet test' needs it. -->
+    <!-- xUnit v3 runs on Microsoft.Testing.Platform. The .NET 10 SDK rejects its VSTest bridge,
+         so CI and local verification invoke the built test executable directly. -->
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     <IsPackable>false</IsPackable>

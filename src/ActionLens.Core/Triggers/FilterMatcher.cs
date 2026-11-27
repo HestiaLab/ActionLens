@@ -55,7 +55,7 @@ public enum FilterListMode
 /// and why path patterns match from the repository root).
 /// </para>
 /// </remarks>
-public sealed class FilterPattern
+internal sealed class FilterPattern
 {
     /// <summary>Standing for "repeat without end" in an atom's bounds.</summary>
     private const int Unbounded = int.MaxValue;
@@ -117,10 +117,19 @@ public sealed class FilterPattern
     }
 
     /// <summary>True when this pattern matches the whole of <paramref name="value"/>.</summary>
-    public bool IsMatch(string value)
+    public bool IsMatch(string value) =>
+        TryMatch(value, out var matched, out _) && matched;
+
+    /// <summary>
+    /// Tries a match and distinguishes a definite answer from budget exhaustion. A false return means the
+    /// matcher could not decide; callers that produce a trigger verdict must use that state as unknown.
+    /// </summary>
+    public bool TryMatch(string value, out bool matched, out bool exhausted)
     {
         ArgumentNullException.ThrowIfNull(value);
 
+        matched = false;
+        exhausted = false;
         if (!IsValid)
         {
             // A pattern ActionLens could not read says nothing. The finding about it is the answer.
@@ -128,7 +137,8 @@ public sealed class FilterPattern
         }
 
         var budget = MaxMatchSteps;
-        return MatchFrom(_atoms.AsSpan(), value.AsSpan(), ref budget);
+        matched = MatchFrom(_atoms.AsSpan(), value.AsSpan(), ref budget, ref exhausted);
+        return !exhausted;
     }
 
     // ------------------------------------------------------------------ token engine
@@ -350,12 +360,17 @@ public sealed class FilterPattern
         _ => 2,
     };
 
-    private static bool MatchFrom(ReadOnlySpan<Atom> atoms, ReadOnlySpan<char> rest, ref int budget)
+    private static bool MatchFrom(
+        ReadOnlySpan<Atom> atoms,
+        ReadOnlySpan<char> rest,
+        ref int budget,
+        ref bool exhausted)
     {
         if (budget-- <= 0)
         {
             // Refuse rather than answer: a wrong "it matched" is worse than no answer at all, and the
             // caller that hits this budget is holding a pathological pattern, not a real branch name.
+            exhausted = true;
             return false;
         }
 
@@ -370,12 +385,12 @@ public sealed class FilterPattern
 
         for (var count = 0; count <= limit; count++)
         {
-            if (count >= atom.Min && MatchFrom(tail, rest[count..], ref budget))
+            if (count >= atom.Min && MatchFrom(tail, rest[count..], ref budget, ref exhausted))
             {
                 return true;
             }
 
-            if (count == limit || !CharMatches(atom, rest[count]))
+            if (exhausted || count == limit || !CharMatches(atom, rest[count]))
             {
                 // This atom cannot take another character, so no longer repeat can be tried.
                 return false;
@@ -414,7 +429,7 @@ public sealed class FilterPattern
 /// The documented rules over one filter's <em>list</em> of patterns, on top of the single-pattern engine
 /// in <see cref="FilterPattern"/>.
 /// </summary>
-public static class FilterMatcher
+internal static class FilterMatcher
 {
     /// <summary>Compiles every pattern of a filter key, keeping order, text and positions.</summary>
     public static IReadOnlyList<FilterPattern> CompileAll(IReadOnlyList<WorkflowValue> values)
@@ -446,12 +461,36 @@ public static class FilterMatcher
         ArgumentNullException.ThrowIfNull(value);
 
         FilterPattern? deciding = null;
+        FilterMatch? unknown = null;
         foreach (var pattern in patterns)
         {
-            if (pattern.IsMatch(value))
+            if (!pattern.TryMatch(value, out var matched, out var exhausted))
+            {
+                if (exhausted)
+                {
+                    unknown ??= new FilterMatch(false, null, value)
+                    {
+                        IsUnknown = true,
+                        UnknownReason = $"The pattern '{pattern.RawText}' exceeded the match budget, so whether it matches '{value}' is unknown.",
+                        UnknownPattern = pattern,
+                    };
+                }
+
+                continue;
+            }
+
+            if (matched)
             {
                 deciding = pattern;
+                // A later definite match is the last matching pattern regardless of whether an earlier
+                // pathological pattern would also have matched.
+                unknown = null;
             }
+        }
+
+        if (unknown is not null)
+        {
+            return unknown.Value;
         }
 
         if (deciding is null)
@@ -478,17 +517,24 @@ public static class FilterMatcher
         ArgumentNullException.ThrowIfNull(files);
 
         FilterMatch last = new(mode == FilterListMode.Ignore, null, null);
+        FilterMatch? unknown = null;
         foreach (var file in files)
         {
             var result = Match(patterns, file, mode);
             last = result with { ValuesTested = files.Count };
+            if (result.IsUnknown)
+            {
+                unknown ??= result with { ValuesTested = files.Count };
+                continue;
+            }
+
             if (result.Satisfied)
             {
                 return last;
             }
         }
 
-        return last;
+        return unknown is { } unresolved ? unresolved : last;
     }
 
     /// <summary>The sense one entry has inside one list: <c>branches: [!dev]</c> excludes, <c>branches-ignore: [!dev]</c> includes.</summary>
@@ -504,8 +550,18 @@ public static class FilterMatcher
 /// <param name="DecidingPattern">The last pattern that matched, null when no pattern matched at all.</param>
 /// <param name="Value">The value that was tested; null when there was nothing to test.</param>
 /// <param name="ValuesTested">How many values the list was run against; one for a ref, many for paths.</param>
-public readonly record struct FilterMatch(
+internal readonly record struct FilterMatch(
     bool Satisfied,
     FilterPattern? DecidingPattern,
     string? Value,
-    int ValuesTested = 0);
+    int ValuesTested = 0)
+{
+    /// <summary>True when the matcher hit its work budget and cannot give a definite answer.</summary>
+    public bool IsUnknown { get; init; }
+
+    /// <summary>Why the answer is unknown, present only when <see cref="IsUnknown"/> is true.</summary>
+    public string? UnknownReason { get; init; }
+
+    /// <summary>The pattern whose work budget was exhausted.</summary>
+    public FilterPattern? UnknownPattern { get; init; }
+}

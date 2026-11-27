@@ -18,7 +18,7 @@ namespace ActionLens.Core.Expressions;
 /// both implementations accept <c>format(null)</c> and <c>format('')</c>, so we do not reject one.
 /// </para>
 /// </remarks>
-public static class ExpressionFunctions
+internal static class ExpressionFunctions
 {
     private static readonly Dictionary<string, FunctionSignature> Signatures = new(StringComparer.OrdinalIgnoreCase)
     {

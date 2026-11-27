@@ -3,7 +3,7 @@ using ActionLens.Core.Text;
 namespace ActionLens.Core.Workflows;
 
 /// <summary>A step as written. Either an action call (<see cref="Uses"/>) or a script (<see cref="Run"/>).</summary>
-public sealed record StepDefinition
+internal sealed record StepDefinition
 {
     /// <summary>Zero-based position in the job's <c>steps:</c> list; also used to name the step in messages.</summary>
     public required int Index { get; init; }

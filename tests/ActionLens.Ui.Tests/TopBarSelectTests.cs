@@ -1,5 +1,6 @@
 using ActionLens.Core.Scenarios;
 using ActionLens.Ui.Components;
+using ActionLens.Ui.Services;
 using ActionLens.Ui.Tests.Supporting;
 using Bunit;
 using Microsoft.AspNetCore.Components;
@@ -86,11 +87,11 @@ public sealed class TopBarSelectTests
 
         IRenderedComponent<TopBar> cut = harness.Context.Render<TopBar>();
 
-        // Option 2 is 'build is skipped' (0 = every job succeeds, then fail/skip per job in document
-        // order). The counts are the browser-verified answer from docs/w4-verification.md §A2
+        // The stable id names the scenario, not its position in a list that changes with the workflow.
+        // The counts are the browser-verified answer from docs/w4-verification.md §A2
         // (+0 will run · −2 will not · ?4 unknown), so a select that only moved the DOM cannot produce
         // them and a select that moved the app state will.
-        cut.Find("#al-scenario").Change("2");
+        cut.Find("#al-scenario").Change("job:build:skipped");
 
         Assert.Equal(ScenarioJobState.IsSkipped, harness.Session.Scenario.JobStates["build"]);
 
@@ -104,7 +105,7 @@ public sealed class TopBarSelectTests
     }
 
     [Fact]
-    public void ScenarioSelect_ClampsAnOutOfRangeIndex_WithoutSelectingAScenarioThatDoesNotExist()
+    public void ScenarioSelect_RejectsAnUnknownId_WithoutSelectingAScenarioThatDoesNotExist()
     {
         using ComponentHarness harness = new();
         harness.LoadExample("atlas-ci.yml");
@@ -116,8 +117,109 @@ public sealed class TopBarSelectTests
 
         // Clamped to 0: the default scenario stays in force, and the control displays the clamp.
         Assert.Equal(Scenario.Default, harness.Session.Scenario);
-        Assert.Equal("0", Required(cut.Find("#al-scenario"), "value"));
+        Assert.Equal("default", Required(cut.Find("#al-scenario"), "value"));
         Assert.Equal(scenarioCountBefore, cut.Find("#al-scenario").QuerySelectorAll("option").Length);
+    }
+
+    private const string TwoJobs = """
+        name: two
+        on: push
+        jobs:
+          alpha:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo alpha
+          beta:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo beta
+        """;
+
+    private const string OneJob = """
+        name: one
+        on: push
+        jobs:
+          alpha:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo alpha
+        """;
+
+    private const string BetaOnly = """
+        name: one
+        on: push
+        jobs:
+          beta:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo beta
+        """;
+
+    private const string ReorderedTwoJobs = """
+        name: two
+        on: push
+        jobs:
+          beta:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo beta
+          alpha:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo alpha
+        """;
+
+    [Fact]
+    public async Task ScenarioSelect_KeepsCancellationSelectedAfterAJobIsRemovedAsync()
+    {
+        using ComponentHarness harness = new();
+        harness.LoadExample("atlas-ci.yml");
+        IRenderedComponent<TopBar> cut = harness.Context.Render<TopBar>();
+
+        cut.Find("#al-scenario").Change("workflow-cancelled");
+        harness.Session.ReplaceText(EditorTarget.Workflow, TwoJobs);
+        cut.WaitForState(() => harness.Session.Report?.Workflow.JobCount == 2);
+        harness.Session.ReplaceText(EditorTarget.Workflow, OneJob);
+        cut.WaitForState(() => harness.Session.Report?.Workflow.JobCount == 1
+            && Required(cut.Find("#al-scenario"), "value") == "workflow-cancelled");
+
+        Assert.True(harness.Session.Scenario.WorkflowCancelled);
+        Assert.Equal("workflow-cancelled", Required(cut.Find("#al-scenario"), "value"));
+    }
+
+    [Fact]
+    public async Task ScenarioSelect_ShowsAnHonestCustomLabelWhenTheSelectedJobIsRemovedAsync()
+    {
+        using ComponentHarness harness = new();
+        harness.LoadExample("atlas-ci.yml");
+        IRenderedComponent<TopBar> cut = harness.Context.Render<TopBar>();
+
+        harness.Session.ReplaceText(EditorTarget.Workflow, TwoJobs);
+        cut.WaitForState(() => harness.Session.Report?.Workflow.JobCount == 2);
+        cut.Find("#al-scenario").Change("job:alpha:failed");
+        harness.Session.ReplaceText(EditorTarget.Workflow, BetaOnly);
+        cut.WaitForState(() => harness.Session.Report?.Workflow.JobCount == 1
+            && Required(cut.Find("#al-scenario"), "value") == "custom");
+
+        Assert.Equal(ScenarioJobState.Fails, harness.Session.Scenario.JobStates["alpha"]);
+        Assert.Contains("alpha fails", cut.Find("#al-scenario option:checked").TextContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ScenarioSelect_KeepsTheSelectedJobScenarioAfterJobsAreReorderedAsync()
+    {
+        using ComponentHarness harness = new();
+        harness.LoadExample("atlas-ci.yml");
+        IRenderedComponent<TopBar> cut = harness.Context.Render<TopBar>();
+
+        harness.Session.ReplaceText(EditorTarget.Workflow, TwoJobs);
+        cut.WaitForState(() => harness.Session.Report?.Workflow.JobCount == 2);
+        cut.Find("#al-scenario").Change("job:alpha:failed");
+        harness.Session.ReplaceText(EditorTarget.Workflow, ReorderedTwoJobs);
+        cut.WaitForState(() => harness.Session.Report?.Jobs[0].JobId == "beta"
+            && Required(cut.Find("#al-scenario"), "value") == "job:alpha:failed");
+
+        Assert.Equal(ScenarioJobState.Fails, harness.Session.Scenario.JobStates["alpha"]);
     }
 
     /// <summary>The binding writes the chosen value into the <c>value</c> attribute; its absence is a

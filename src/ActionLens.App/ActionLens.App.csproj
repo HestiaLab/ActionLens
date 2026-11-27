@@ -38,6 +38,8 @@
   <ItemGroup>
     <EditorScriptSource Include="$(MSBuildProjectDirectory)\ClientScripts\**\*.ts" />
     <EditorScriptSource Include="$(RepoRoot)\package.json" />
+    <EditorScriptSource Include="$(RepoRoot)\package-lock.json" />
+    <EditorScriptSource Include="$(RepoRoot)\scripts\build-editor.mjs" />
   </ItemGroup>
 
   <!--

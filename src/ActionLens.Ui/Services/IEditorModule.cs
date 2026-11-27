@@ -24,3 +24,6 @@ public interface IEditorModule
     /// </summary>
     Task<IJSObjectReference?> GetAsync();
 }
+
+/// <summary>The clamped 1-based position the editor actually moved to.</summary>
+public sealed record EditorRevealResult(int Line, int Column);

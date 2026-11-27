@@ -19,7 +19,7 @@ namespace ActionLens.Core.Expressions;
 ///     against one is <see langword="false"/> unless both operands resolved to the same value.</item>
 /// </list>
 /// </remarks>
-public static class ExpressionCoercion
+internal static class ExpressionCoercion
 {
     /// <summary>
     /// GitHub's loose equality. <paramref name="sameInstance"/> carries what the evaluator knows about
@@ -61,11 +61,11 @@ public static class ExpressionCoercion
         TryCompare(left, right, out var order) && order > 0;
 
     /// <summary><c>&lt;=</c> is equality or less-than, matching how both implementations define it.</summary>
-    public static bool LessThanOrEqual(GitHubValue left, GitHubValue right) =>
-        AreEqual(left, right) || LessThan(left, right);
+    public static bool LessThanOrEqual(GitHubValue left, GitHubValue right, bool sameInstance = false) =>
+        AreEqual(left, right, sameInstance) || LessThan(left, right);
 
-    public static bool GreaterThanOrEqual(GitHubValue left, GitHubValue right) =>
-        AreEqual(left, right) || GreaterThan(left, right);
+    public static bool GreaterThanOrEqual(GitHubValue left, GitHubValue right, bool sameInstance = false) =>
+        AreEqual(left, right, sameInstance) || GreaterThan(left, right);
 
     /// <summary>
     /// Orders two values, or reports that they cannot be ordered at all — which every operator then

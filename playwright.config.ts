@@ -25,7 +25,8 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   webServer: {
-    command: 'dotnet run --project src/ActionLens.App --urls http://127.0.0.1:5179',
+    command: 'dotnet run --project src/ActionLens.App --urls http://127.0.0.1:5179 --no-launch-profile',
+    env: { ASPNETCORE_ENVIRONMENT: 'Production' },
     url: 'http://127.0.0.1:5179',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

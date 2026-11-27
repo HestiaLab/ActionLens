@@ -12,7 +12,7 @@ namespace ActionLens.Core.Workflows;
 /// are the same four characters but behave differently in Actions — one arrives as a boolean, the
 /// other as a non-empty string — and keeping only one of the two would make that invisible.
 /// </remarks>
-public readonly record struct WorkflowValue(GitHubValue Value, string Text, SourceRange Range)
+internal readonly record struct WorkflowValue(GitHubValue Value, string Text, SourceRange Range)
 {
     public bool IsString => Value.Kind == GitHubValueKind.String;
 }

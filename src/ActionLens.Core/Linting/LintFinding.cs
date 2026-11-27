@@ -9,7 +9,7 @@ namespace ActionLens.Core.Linting;
 /// <see cref="LintRuleDescriptor"/>, which the registry stamps onto every finding a rule returns — that is
 /// what keeps a rule from being able to report itself under someone else's id.
 /// </summary>
-public sealed record LintFinding
+internal sealed record LintFinding
 {
     /// <summary>The value of <see cref="PromotesEngineFindingAt"/> for a finding that stands on its own.</summary>
     public const int NotAPromotion = -1;

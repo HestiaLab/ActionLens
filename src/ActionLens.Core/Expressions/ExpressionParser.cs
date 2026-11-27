@@ -16,7 +16,7 @@ namespace ActionLens.Core.Expressions;
 /// The span of the whole segment. For an expression segment that includes the <c>${{</c> and <c>}}</c>
 /// when they are written; the expression node itself spans only the body.
 /// </param>
-public sealed record TemplateSegment(string? LiteralText, ExpressionNode? Expression, SourceRange Range);
+internal sealed record TemplateSegment(string? LiteralText, ExpressionNode? Expression, SourceRange Range);
 
 /// <summary>
 /// What parsing produced: the segments of the value, and everything that was wrong with it.
@@ -26,7 +26,7 @@ public sealed record TemplateSegment(string? LiteralText, ExpressionNode? Expres
 /// carries an absolute document position, so no caller has to re-base it against the YAML span the
 /// value came from.
 /// </remarks>
-public sealed record ExpressionParseOutcome(
+internal sealed record ExpressionParseOutcome(
     IReadOnlyList<TemplateSegment> Segments,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
@@ -82,7 +82,7 @@ public sealed record ExpressionParseOutcome(
 /// with an offset - which is how the YAML and Workflows layers are expected to call this.
 /// </para>
 /// </remarks>
-public static class ExpressionParser
+internal static class ExpressionParser
 {
     /// <summary>
     /// The longest expression body either reference implementation accepts. This limit is not in the

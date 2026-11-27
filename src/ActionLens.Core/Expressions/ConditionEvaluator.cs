@@ -7,7 +7,7 @@ namespace ActionLens.Core.Expressions;
 /// <summary>
 /// The answer to one <c>if:</c> condition, with everything that explains it.
 /// </summary>
-public sealed record ConditionOutcome
+internal sealed record ConditionOutcome
 {
     public required TriValue Value { get; init; }
 
@@ -35,7 +35,7 @@ public sealed record ConditionOutcome
 /// <c>github.ref == 'refs/heads/main'</c> still does not run when an ancestor failed. Evaluating the
 /// bare condition instead would report jobs as running that GitHub would skip.
 /// </remarks>
-public sealed class ConditionEvaluator
+internal sealed class ConditionEvaluator
 {
     private static readonly string[] StatusFunctionNames = ["success", "failure", "always", "cancelled"];
 

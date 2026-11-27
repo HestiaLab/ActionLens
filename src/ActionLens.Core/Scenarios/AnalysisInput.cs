@@ -21,7 +21,7 @@ namespace ActionLens.Core.Scenarios;
 /// analyses of the same inputs therefore produce the same report bytes.
 /// </para>
 /// </remarks>
-public sealed record AnalysisInput
+internal sealed record AnalysisInput
 {
     /// <summary>
     /// The payload is as untrusted as the workflow text and gets the same byte ceiling. Without it a
@@ -113,6 +113,7 @@ public sealed record AnalysisInput
                 Code = DiagnosticCodes.YamlSizeLimit,
                 Severity = DiagnosticSeverity.Error,
                 Stage = DiagnosticStage.Scenario,
+                Source = DiagnosticSource.EventPayload,
                 Message = $"The event payload is {bytes:N0} bytes, above the {MaxPayloadBytes:N0} byte limit ActionLens reads.",
                 Range = range,
                 Suggestion = "Paste only the fields the condition reads, or a trimmed recorded event.",
@@ -132,8 +133,9 @@ public sealed record AnalysisInput
                 Code = DiagnosticCodes.InvalidValue,
                 Severity = DiagnosticSeverity.Warning,
                 Stage = DiagnosticStage.Scenario,
+                Source = DiagnosticSource.EventPayload,
                 Message = $"The event payload is not readable JSON, so no github context was derived: {ex.Message}",
-                Range = range,
+                Range = new SourceRange(new SourcePosition((int)(ex.LineNumber ?? 0) + 1, (int)(ex.BytePositionInLine ?? 0) + 1)),
                 Suggestion = "Paste the event body as one JSON object, e.g. {\"event_name\":\"push\",\"ref\":\"refs/heads/main\"}.",
             });
             return new AnalysisInput { Diagnostics = diagnostics };
@@ -157,6 +159,7 @@ public sealed record AnalysisInput
                 Code = DiagnosticCodes.InvalidValue,
                 Severity = DiagnosticSeverity.Warning,
                 Stage = DiagnosticStage.Scenario,
+                Source = DiagnosticSource.EventPayload,
                 Message = $"The event payload is {Describe(root)}, not a JSON object, so no github context was derived.",
                 Range = new SourceRange(new SourcePosition(1, 1)),
                 Suggestion = "GitHub's event payloads are always one object; paste the body rather than a value.",
@@ -168,7 +171,7 @@ public sealed record AnalysisInput
         var eventSource = root.TryGetProperty("event", out var nested) && nested.ValueKind == JsonValueKind.Object
             ? nested
             : root;
-        var githubEvent = EventPayloadReader.ReadObject(eventSource, ["event_name", "vars"]);
+        var githubEvent = JsonValueConverter.ReadObject(eventSource, ["event_name", "vars"]);
         var github = new Dictionary<string, GitHubValue>(StringComparer.Ordinal)
         {
             ["event"] = GitHubValue.FromObject(githubEvent),
@@ -248,7 +251,7 @@ public sealed record AnalysisInput
         value = GitHubValue.Null;
         return element.ValueKind == JsonValueKind.Object
             && element.TryGetProperty(property, out var child)
-            && EventPayloadReader.TryWrap(child, out value);
+            && JsonValueConverter.TryWrap(child, out value);
     }
 
     /// <summary>Reads <c>parent.child.property</c> when all three exist and the last one is text.</summary>
@@ -275,7 +278,7 @@ public sealed record AnalysisInput
         var map = new Dictionary<string, GitHubValue>(StringComparer.Ordinal);
         foreach (var property in value.EnumerateObject())
         {
-            map[property.Name] = EventPayloadReader.ToValue(property.Value);
+            map[property.Name] = JsonValueConverter.ToValue(property.Value);
         }
 
         return map;
@@ -289,48 +292,4 @@ public sealed record AnalysisInput
         JsonValueKind.True or JsonValueKind.False => "a JSON boolean",
         _ => "null",
     };
-}
-
-/// <summary>
-/// Turns JSON elements into workflow values, the same six types <c>fromJSON()</c> produces. Kept next to
-/// <see cref="AnalysisInput"/> rather than in the evaluator because the payload reader is the only other
-/// caller and the two must agree on what a JSON number becomes.
-/// </summary>
-internal static class EventPayloadReader
-{
-    internal static Dictionary<string, GitHubValue> ReadObject(JsonElement element, string[] skip)
-    {
-        var map = new Dictionary<string, GitHubValue>(StringComparer.Ordinal);
-        foreach (var property in element.EnumerateObject())
-        {
-            if (Array.IndexOf(skip, property.Name) >= 0)
-            {
-                continue;
-            }
-
-            map[property.Name] = ToValue(property.Value);
-        }
-
-        return map;
-    }
-
-    internal static GitHubValue ToValue(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.Null or JsonValueKind.Undefined => GitHubValue.Null,
-        JsonValueKind.True => GitHubValue.True,
-        JsonValueKind.False => GitHubValue.False,
-        JsonValueKind.String => GitHubValue.FromString(element.GetString() ?? string.Empty),
-        JsonValueKind.Number => GitHubValue.FromNumber(element.GetDouble()),
-        JsonValueKind.Array => GitHubValue.FromArray(
-            element.EnumerateArray().Select(ToValue).ToArray()),
-        JsonValueKind.Object => GitHubValue.FromObject(ReadObject(element, [])),
-        _ => GitHubValue.Null,
-    };
-
-    /// <summary>Wraps any JSON value, but reports a missing or null one as "no value" rather than a member.</summary>
-    internal static bool TryWrap(JsonElement element, out GitHubValue value)
-    {
-        value = ToValue(element);
-        return element.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
-    }
 }

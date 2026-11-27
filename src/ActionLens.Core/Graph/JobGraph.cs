@@ -7,7 +7,7 @@ namespace ActionLens.Core.Graph;
 /// finished. The direction is the one the author wrote, so a message about this edge can point at
 /// <see cref="Job"/>'s <c>needs:</c> list.
 /// </summary>
-public sealed record JobGraphEdge
+internal sealed record JobGraphEdge
 {
     /// <summary>The job that declares the dependency.</summary>
     public required string Job { get; init; }
@@ -27,7 +27,7 @@ public sealed record JobGraphEdge
 /// This answers structure only. Whether a job <em>will</em> run is the scenario engine's question:
 /// it needs <c>if:</c>, matrix and trigger state, none of which live here.
 /// </remarks>
-public sealed class JobGraph
+internal sealed class JobGraph
 {
     private readonly string[] _jobIds;
     private readonly string[][] _dependencies;

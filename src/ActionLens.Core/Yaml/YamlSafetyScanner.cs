@@ -181,6 +181,21 @@ internal static class YamlSafetyScanner
             return new ScanResult(false, diagnostics);
         }
 
+        return BuildVerdict(diagnostics, documents, aliases, tooDeep, stoppedEarly, duplicates);
+    }
+
+    /// <summary>
+    /// The post-scan verdict: the limit findings and whether the object pass may run. Separated from
+    /// the token loop so the loop reads as the stream walk it is.
+    /// </summary>
+    private static ScanResult BuildVerdict(
+        List<Diagnostic> diagnostics,
+        int documents,
+        int aliases,
+        bool tooDeep,
+        bool stoppedEarly,
+        int duplicates)
+    {
         if (documents > 1)
         {
             diagnostics.Add(new Diagnostic

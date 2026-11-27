@@ -7,7 +7,7 @@ namespace ActionLens.Core.Expressions;
 /// The four status check functions GitHub allows in <c>if:</c> conditions. Their answer comes from how
 /// the run went, which is what the scenario engine decides.
 /// </summary>
-public enum StatusFunction
+internal enum StatusFunction
 {
     Success,
     Failure,
@@ -23,7 +23,7 @@ public enum StatusFunction
 /// do with ignorance, which is the point — silently reading <see cref="Value"/> as if it were always
 /// present is how a static analyzer ends up reporting guesses as facts.
 /// </remarks>
-public readonly record struct Evaluated
+internal readonly record struct Evaluated
 {
     public GitHubValue? Value { get; }
 
@@ -58,7 +58,7 @@ public readonly record struct Evaluated
 /// the evaluator independent of where values come from — a job scope, a step scope, a test double —
 /// and makes "we cannot know this" a first-class answer rather than a fake value.
 /// </summary>
-public interface IContextProvider
+internal interface IContextProvider
 {
     /// <summary>
     /// Whether the context name may appear in this position at all. GitHub restricts contexts per
@@ -95,4 +95,22 @@ public interface IContextProvider
     /// documentation does not resolve for <c>success()</c>.
     /// </summary>
     bool TryGetStatus(StatusFunction statusFunction, out TriValue value);
+}
+
+/// <summary>
+/// A context object whose declared members can be known, unknown, or absent independently. The public
+/// provider seam stays whole-context based; the scenario engine uses this internal refinement so an unknown
+/// env member is not mistaken for a missing one.
+/// </summary>
+internal interface ICompositeContextProvider
+{
+    bool HasUnknownMembers(string contextName);
+
+    bool TryGetContextShell(string contextName, out GitHubValue value);
+
+    UnknownReason ExplainUnknownMembers(string contextName);
+
+    bool TryGetKnownMember(string contextName, string memberName, out GitHubValue value);
+
+    bool TryGetUnknownMember(string contextName, string memberName, out UnknownReason reason);
 }

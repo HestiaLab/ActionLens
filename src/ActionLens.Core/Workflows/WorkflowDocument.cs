@@ -7,7 +7,7 @@ namespace ActionLens.Core.Workflows;
 /// matrix dimensions keep the text the author wrote plus the position it came from, so that later
 /// stages can explain themselves instead of restating a guess.
 /// </summary>
-public sealed record WorkflowDocument
+internal sealed record WorkflowDocument
 {
     /// <summary>The workflow's <c>name:</c>, or the file name when the author did not set one.</summary>
     public required string Name { get; init; }
@@ -38,7 +38,7 @@ public sealed record WorkflowDocument
 }
 
 /// <summary><c>defaults:</c> — applied to every step that does not say otherwise.</summary>
-public sealed record DefaultsSection
+internal sealed record DefaultsSection
 {
     public static DefaultsSection Empty { get; } = new();
 
@@ -50,7 +50,7 @@ public sealed record DefaultsSection
 }
 
 /// <summary><c>concurrency:</c> — a group name plus whether pending runs are cancelled.</summary>
-public sealed record ConcurrencySection
+internal sealed record ConcurrencySection
 {
     public required string Group { get; init; }
 

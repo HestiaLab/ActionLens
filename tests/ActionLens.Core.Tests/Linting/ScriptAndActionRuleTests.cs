@@ -230,10 +230,31 @@ public sealed class ScriptAndActionRuleTests
         """)]
     [InlineData("- run: echo ${{ matrix.os }}")]
     [InlineData("- run: echo ${{ inputs.environment }}")]
-    [InlineData(@"- run: echo 'secrets are not the payload' && echo ${{ github.ref }}")]
+    [InlineData(@"- run: echo ${{ github.ref_name }}")]
+    [InlineData(@"- run: echo ${{ github.event_name }}")]
+
     public void ScriptThatDoesNotInterpolateThePayload_StaysSilent(string step)
     {
         LintTestHarness.StaysSilent(LintTestHarness.OneJob(step), LintRuleTable.PayloadIntoScript);
+    }
+
+    [Fact]
+    public void GithubRefInAPullRequestOnlyScript_StaysSilentBecauseTheMergeRefIsNotBranchInput()
+    {
+        var yaml = LintTestHarness.OneJob(@"- run: echo ${{ github.ref }}")
+            .Replace("push:", "pull_request:", StringComparison.Ordinal);
+
+        LintTestHarness.StaysSilent(yaml, LintRuleTable.PayloadIntoScript);
+    }
+
+    [Fact]
+    public void EventDerivedRefInAScript_FiresBecauseBranchNamesCanCarryShellSyntax()
+    {
+        var yaml = LintTestHarness.OneJob(@"- run: echo ${{ github.ref }}");
+        var finding = LintTestHarness.FiresOnce(yaml, LintRuleTable.PayloadIntoScript);
+
+        Assert.Equal(DiagnosticSeverity.Critical, finding.Severity);
+        Assert.Contains("github.ref", finding.Message, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ AL008

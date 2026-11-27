@@ -443,6 +443,162 @@ Ui 24 → 25（`WorkspaceRenderTests`）；Playwright 6 → 8（DOM 身份保护
 2. 回退 workspace 收窄 → `RenderCount` 由 1 变 5，`WorkspaceRenderTests` 失败；收窄后恒为 1。
 3. 恢复「失败即关闭」的 `.catch()` → interop 探针只尝试 1 次回调而非 2 次，浏览器用例失败。
 
-**仍未执行**：`.github/workflows/gate2.yml` 在真实 GitHub Actions 上跑一次（需要公开仓库，
-工作副本无 `.git`），以及由此解锁的公开仓库 / Pages 部署、Q6 第二批结构重构。按 Q5/F 的裁决，
-这些都不应在本地伪造为已完成。
+**当时未执行**：`.github/workflows/gate2.yml` 在真实 GitHub Actions 上跑一次、Pages 部署，
+以及 Q6 第二批结构重构。按 Q5/F 的裁决，这些都不应在本地伪造为已完成。
+
+> **状态更新（2026-11-05 15:30，合并后复核）**：PR #1 已 `MERGED`（squash 为 `f07a096`），
+> 特性分支已从远端删除；`main` 仍在 `2363021`。`dev` 受保护，后续改动从 `dev` 开特性分支、
+> 开 PR（base `dev`）由维护者合并；`dev` → `main` 另开评审 PR。
+> **Gate 2 的全部真实 CI 运行均为 `success`**：
+> - `41977057618` — `push` / `main` / `2363021`（首次，2m56s）
+> - `41981780325`、`41986150317` — `pull_request` / PR #1 的两个提交（含改后 workflow）
+> - `41987481649` — `push` / `dev` / `f07a096`（`dev` 分支首次，两 job 均绿）
+>
+> 因此上一版写的「精度边界」（改动尚未提交/推送/经过 CI、`dev` 从未触发 workflow）已全部解除：
+> 改后的 workflow（触发 `[main, dev]`、seven criteria 注释、v5/v6 actions、`ubuntu-24.04`）
+> 已在 PR 与 `dev` push 两种事件下跑绿。Q5/F 里以 Gate 2 绿灯为前置的 Pages 部署与 Q6
+> 第二批结构重构已解锁；后者已由 §16 完成去重与 CI 技术债部分。
+> **仍待执行**：`dev` → `main` 评审 PR、Pages 首次部署与首个 release、§16 明确留下的
+> 「收窄 public 面 / 拆超长文件」，以及 ADR 0003 Deferred 的产品功能（Q2 已否决，须重开 ADR）。
+> **后续状态（2026-11-05 续四、续五）**：「收窄 public 面」见 §17、「拆超长文件」见 §18，两项已完成；
+> 本行其余三项仍未执行。
+
+---
+
+## 16. Q6 第二批：去重与 CI 技术债（2026-11-05 续三）
+
+Gate 2 在真实 CI 绿灯后，按 F 裁决解锁的「收窄 public 面 + 抽重复实现」开始逐项动。
+**先核实审阅结论再动手，结果修正了 §7 的两处描述**：
+
+- §7 说 Levenshtein `Distance` 有**三份**。实际只有两份是同构的两行动态规划
+  （`JobGraphAnalyzer.cs`、`RunnerLabelTypoRule.cs`）；`WorkflowModelBuilder.cs` 那份是
+  `Math.Abs(长度差) + Zip.Count(逐位不同)` 的**位置启发式**，不是编辑距离。把它换成
+  Levenshtein 会改变「Did you mean」给出的建议，属于行为变更而非去重。
+- §7 说 JSON/YAML → `GitHubValue` 有**三份**。实际是**两份** JSON→值
+  （`ExpressionEvaluator.JsonConverter`、`AnalysisInput.EventPayloadReader`）加**一份** YAML→值
+  （`WorkflowModelBuilder.ToValue`）。YAML 标量要按 YAML 规则解析并携带原文与位置，
+  `JsonElement` 不具备这些信息，不能合并。
+
+落地：
+- 新增 `src/ActionLens.Core/Text/EditDistance.cs`（`LevenshteinIgnoreCase`），两处 typo 规则改为调用它，
+  删掉各自的局部实现；`WorkflowModelBuilder` 的启发式保留并加注释说明为何不共享。
+- 新增 `src/ActionLens.Core/Values/JsonValueConverter.cs`，把 `EventPayloadReader` 与嵌套的
+  `JsonConverter` 合成一份，删掉两个重复类；`AnalysisInput.cs:276-277` 原本靠注释要求「两者必须一致」，
+  现在由结构保证。
+- `tests/ActionLens.Core.Tests/Values/SharedConvertersTests.cs`：编辑距离（含对称性、大小写）、
+  JSON 各类型映射、`ReadObject` 跳过键与 `TryWrap` 拒绝 null，共 7 条断言。
+- **收窄 public 面 / 拆超长文件仍未做**：那会改变约 55 个 public 类型的可见性并牵动大量测试，
+  属于独立的 API 决策，不在这一批。但本批新增的两个共享类最初误写成 `public`，等于反向扩大了
+  public 面；合并后已改回 `internal`（`InternalsVisibleTo` 已配置，测试不受影响），并加
+  `SharedHelpers_AreNotPartOfThePublicApi` 护栏断言防止回退。
+
+CI 技术债（上轮两条 annotation）：
+- `runner` 固定为 `ubuntu-24.04`，避免 `ubuntu-latest` 迁移到 Ubuntu 26 时静默改变 Chromium 系统依赖。
+- `actions/checkout`、`setup-dotnet`、`setup-node` 升到 `v5`、`upload-artifact` 升到 `v6`——
+  查过各 tag 的 `action.yml`：`v4` 是 node20，`v5`/`v6` 是首个 node24 稳定大版本；
+  不跳到 v7 以减小变更面。依据写在 workflow 顶部注释里。
+
+**复测**：构建 0/0 · 格式 0 · Core **1416**（新增 7 条）· Ui 25 · Playwright **8 / 8**。
+
+---
+
+## 17. 收窄 public 面与修复不一致 graph（2026-11-05 续四）
+
+§16 把「收窄 public 面」标成独立的 API 决策留待后续。合并到 `dev`、Gate 2 在 `main`/`dev`/PR
+三种事件下都跑绿之后，这一批开始动它。**先复现再修，修正了 §7 的一处描述**：
+
+### 17.1 真实缺陷：不一致的 workflow 与 graph
+
+§7 记 `ScenarioEngine.Run`（`:141`、`:214`）用 `_jobs[jobId]` 直接索引，外部传入不一致的
+graph 会抛 `KeyNotFoundException`。本轮写了
+`tests/ActionLens.Core.Tests/Scenarios/ScenarioEngineMismatchTests.cs` 复现：把 `one.yml` 的模型
+与 `two.yml` 的 graph 一起传入，得到 `KeyNotFoundException: 'build'`。`WorkflowAnalyzer` 内部
+总是传匹配的一对（且有 INT001 兜底），但 `ScenarioEngine.Run` 本身是 public，外部可绕过入口。
+
+修复（两条，方向都是「唯一入口」）：
+- `ScenarioEngine` 由 `public` 收窄为 `internal`——`WorkflowAnalyzer` 是唯一 public 入口，
+  外部不再能构造不一致的一对。测试靠 `InternalsVisibleTo` 仍可直接调用。
+- `ScenarioRunner.Run` 在遍历 `TopologicalOrder` / `BlockedJobs` 前用 `_jobs.ContainsKey` 过滤，
+  并新增 `ReportGraphJobsMissingFromWorkflow()`：每个无法定位的 job id 产出一条 INT001 / Internal /
+  Error 诊断，说明「graph 含该 id 但 workflow 没有」，建议从同一个 workflow 建 graph。
+  不抛异常、不给这些 job 编造结果（`Jobs` 为空），符合「宁可诚实未知，也不自信给错答案」。
+
+**A/B**：临时恢复裸索引 → 复现用例重新抛 `KeyNotFoundException`；恢复修复后通过。
+
+### 17.2 批量收窄，边界交给编译器
+
+方法：先筛出「Ui / App / 两个测试程序集里从未按名字引用」的 41 个 Core public 类型；
+批量改成 `internal` 后编译，按 CS0050/CS0051/CS0053/CS0060 报出的「可访问性不一致」逐个回退，
+迭代 3 轮收敛。**这不是靠猜的边界**——被 public 签名引用的类型无法改成 internal，编译器会拒绝。
+
+结果：
+- **27 个类型收窄**（41 个候选中 26 个 + `LintEngine`），包括 `ScenarioEngine`、
+  `ScenarioEvaluation` / `JobScenarioResult`、8 个 lint 规则类、`ConditionEvaluator` /
+  `ExpressionFunctions` / `ConditionOutcome`、表达式节点派生类、`EvaluationScope` 等内部构件。
+- **15 个保留 public**：`ExpressionNode`、`ILintRule`、`LintContext` / `LintResult` /
+  `LintFinding` / `LintCondition`、`MatrixCombination` / `MatrixRun`、`JobGraphEdge` /
+  `JobGraphAnalysisResult`、`StepDefinition` / `DefaultsSection` / `ConcurrencySection` /
+  `WorkflowInput` / `TemplateSegment`。它们出现在 public 属性/方法签名里，是 JSON 导出与 UI 真正
+  依赖的契约，不是「忘了收窄」。
+- 新增 `tests/ActionLens.Core.Tests/PublicSurfaceTests.cs`（11 条断言）：契约类型保持 public、
+  实现类型不重新导出、public 的 `*Engine` 里不含 `ScenarioEngine` / `LintEngine`。
+  编译器保证另一半边界（public 签名不能引用 internal 类型），护栏保证这一半不回退。
+
+### 17.3 仍未做
+
+拆超长文件（`WorkflowModelBuilder` 1444、`TriggerEvaluator` 903、`ExpressionBodyParser` 757、
+`AnalysisReportJson` 559）是纯机械重构，独立于 API 决策，留到下一批；Pages 部署与首个 release、
+ADR 0003 Deferred 产品功能（Q2 已否决）同样未动。
+
+**复测**：构建 0/0 · 格式 0 · Core **1430** · Ui 25 · Playwright **8 / 8**。
+
+> **状态更新（2026-11-05 续五）**：拆超长文件已由 §18 完成；本段其余两项仍未动。
+
+---
+
+## 18. 拆超长文件（2026-11-05 续五）
+
+§17.3 把四个超长文件的拆分标为「纯机械重构，独立于 API 决策，留到下一批」，本批执行。
+依据是先核结构再动手：四个文件都是 file-scoped namespace 的单一类型、原本没有 `partial`，
+分区已经由 `// -----` 注释划好（`WorkflowModelBuilder` 7 段、`TriggerEvaluator` 2 段、
+`AnalysisReportJson` 2 段；`ExpressionBodyParser` 没有分区注释，按方法组与其 XML 文档注释边界切）。
+Core 项目此前没有手写 multi-file partial（仅 UI 的 Razor code-behind 有），这次是第一次；
+项目用 SDK 默认 `**/*.cs` glob，不需要改 csproj。
+
+### 18.1 做法：按行剪切，不改一行方法体
+
+用一次性脚本按现有分区边界整段搬移（用完即删），主文件只保留入口、状态字段与共享助手：
+
+| 主文件（原 → 现） | 分片（搬走的代码行数） |
+|---|---|
+| `WorkflowModelBuilder.cs` 1444 → 559 | `.Triggers.cs` 243、`.Jobs.cs` 368、`.Strategy.cs` 271 |
+| `TriggerEvaluator.cs` 903 → 90 | `.Validation.cs` 158、`.Verdict.cs` 534、`.Helpers.cs` 118 |
+| `ExpressionBodyParser.cs` 757 → 219 | `.Expressions.cs` 124、`.Primaries.cs` 345、`.Tokens.cs` 66 |
+| `AnalysisReportJson.cs` 559 → 81 | `.Sections.cs` 378、`.Primitives.cs` 94 |
+
+合计搬走 2699 行。四个声明加 `partial`，修饰符与可见性不变（`internal sealed` / `public static`），
+`Entry` / `Dimension` / `CallShape` 等嵌套类型随各自分组走。除这四个修饰符外唯一的改动是
+`using`：分片最初复制了主文件的全部 using，`EnforceCodeStyleInBuild` 把 IDE0005 变成 error
+（构建报 23 处），于是用 `dotnet format analyzers --diagnostics IDE0005` 精确删掉各分片不再需要的
+那几行，没有手工猜哪些该留。
+
+### 18.2 证据：这是搬移，不是重写
+
+- 生成脚本断言「行守恒」：原文件里除声明行外的每一行，在拆分后的主文件与分片中各出现一次，
+  允许丢弃的只有分区之间的空行。
+- 脚本的 `--verify` 独立于生成过程，从 `git show HEAD:<file>` 取原始 blob，把 11 个分片的 body
+  与各自 HEAD 行区间逐行比对，全部相同（243+368+271+158+534+118+124+345+66+378+94 = 2699 行）。
+- `git diff --numstat` 里四个主文件合计只有 **4 行新增**（正是 `partial` 修饰符）、2718 行删除
+  （搬走的段 + 多余 using），没有任何方法体被改写。
+- 行为 A/B：拆分前后各用 `CrossProcessDeterminismTests` 的导出探针生成一份报告 bundle
+  （3 个 fixture、多种 payload / scenario、多键 matrix），两份 **217983 字节逐字节相同**
+  （SHA256 `601C86B1…`）。
+- 全套门：构建 0/0 · 格式 0 · Core **1430 / 1430** · Ui **25 / 25** · Playwright **8 / 8**。
+  没有新增、放宽或删除任何断言，测试数量与 §17 完全一致——纯机械重构本就不该改变测试数量。
+
+### 18.3 仍未做
+
+Pages 首次部署与首个 release、ADR 0003 Deferred 的产品功能（Q2 已否决，须重开 ADR）仍未做，
+本批不伪造为已完成。`dev` → `main` 按当前约定**冻结**：所有提交经评审 PR 落到 `dev`，
+是否合并到 `main` 等其余任务解决后再决定，因此 `main` 仍停在初始提交 `2363021`。
+这属于发布与分支策略，不是本地代码重构。

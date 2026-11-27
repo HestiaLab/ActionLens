@@ -51,7 +51,6 @@ as evidence for them. See `docs/limitations.md` for the product-facing statement
 | URL-fragment sharing compressed with LZ-string | not implemented; no `lz-string` dependency | `docs/limitations.md` |
 | 8 KB link threshold and JSON-export fallback | not implemented | `docs/limitations.md` |
 | Language and theme switching | disabled controls, not fake ones | `src/ActionLens.Ui/Components/TopBar.razor` |
-| Runtime "no outbound request" assertion | Gate 2 work | `docs/review-v1-grill.md` decision Q3 |
 
 None of the above may be described as present until a test asserts it. The first three change where
 session state lives, so implementing them requires reopening this ADR.

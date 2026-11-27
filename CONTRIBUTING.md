@@ -3,6 +3,17 @@
 ActionLens explains what a GitHub Actions workflow will do, without executing it. Most bugs here are not
 crashes; they are confident wrong answers. Keep that distinction in mind while reading this.
 
+## Branches and CI
+
+**`dev` is a protected integration branch** — do not push to it directly. Branch from `dev`, push the
+topic branch, and open a pull request with `dev` as its base; a maintainer merges it. `main` is the
+stable branch, reached from `dev` through its own reviewed pull request.
+
+`.github/workflows/gate2.yml` runs on pushes to `dev` and `main` and on every pull request, so a PR
+is checked before merge and the merge commit is checked again. Both jobs — build/format/xUnit v3 and
+Playwright against a real Chromium — must be green before a PR is merged. See `CHANGELOG.md` for the
+full Gate 2 definition; a green local run is not a substitute for a green CI run.
+
 ## Setup
 
 - .NET 10 SDK (`net10.0` throughout).

@@ -93,9 +93,34 @@ internal static class ExpressionTextScanner
         return false;
     }
 
-    /// <summary>Whether a body mentions one of these context paths, e.g. <c>github.event.pull_request.head</c>.</summary>
-    internal static bool Mentions(string interpolationBody, string contextPath) =>
-        interpolationBody.Contains(contextPath, StringComparison.OrdinalIgnoreCase);
+    /// <summary>Whether a body reads one of these context paths, e.g. <c>github.event.pull_request.head</c>.</summary>
+    internal static bool Mentions(string interpolationBody, string contextPath)
+    {
+        for (var index = 0; index < interpolationBody.Length; index++)
+        {
+            if (interpolationBody[index] == '\'')
+            {
+                index = SkipQuotedLiteral(interpolationBody, index);
+                continue;
+            }
+
+            if (!interpolationBody.AsSpan(index).StartsWith(contextPath, StringComparison.OrdinalIgnoreCase)
+                || (index > 0 && IsContinuation(interpolationBody[index - 1])))
+            {
+                continue;
+            }
+
+            var end = index + contextPath.Length;
+            if (end == interpolationBody.Length || !IsPathContinuation(interpolationBody[end]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPathContinuation(char value) => char.IsLetterOrDigit(value) || value is '_' or '-';
 
     private static bool IsContinuation(char previous) =>
         char.IsLetterOrDigit(previous) || previous == '_' || previous == '-' || previous == '.';

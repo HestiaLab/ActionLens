@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Host-layer tests. EditorModule lives in the App project, and pointing Ui.Tests at App would
+    invert the test graph's dependency direction — Ui is deliberately testable without the host.
+    This project references App directly and stubs IJSRuntime, so the module's concurrency and
+    disposal branches are asserted without a browser (the Playwright suite covers the real bundle).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ActionLens.App.Tests</RootNamespace>
+    <AssemblyName>ActionLens.App.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ActionLens.App\ActionLens.App.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -17,7 +17,7 @@ namespace ActionLens.Core.Linting;
 /// than of eight authors' good intentions.
 /// </para>
 /// </remarks>
-public static class LintEngine
+internal static class LintEngine
 {
     /// <summary>Every rule ActionLens ships, in id order — AL001 through AL008.</summary>
     public static IReadOnlyList<ILintRule> Rules { get; } =
@@ -111,7 +111,7 @@ public static class LintEngine
 /// <summary>
 /// What one lint pass produced: the findings that stand on their own, and the stage findings a rule took over.
 /// </summary>
-public sealed record LintResult
+internal sealed record LintResult
 {
     /// <summary>New lint findings, ordered by position then id.</summary>
     public required IReadOnlyList<Diagnostic> Findings { get; init; }

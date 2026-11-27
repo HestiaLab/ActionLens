@@ -10,7 +10,7 @@ namespace ActionLens.Core.Scenarios;
 /// legality question the engine has to answer before any knowledge question — and it is the reason the
 /// <see cref="IContextProvider"/> seam exists at all.
 /// </summary>
-public enum EvaluationPositionKind
+internal enum EvaluationPositionKind
 {
     /// <summary>
     /// <c>jobs.&lt;job_id&gt;.if</c>. Evaluated before the job starts and, per the context availability
@@ -35,7 +35,7 @@ public enum EvaluationPositionKind
 /// a caller must not be able to build a step position whose matrix belongs to another job. Everything in
 /// here is data the analysis already has; nothing is fetched, timed or generated.
 /// </remarks>
-public sealed record EvaluationScope
+internal sealed record EvaluationScope
 {
     public required WorkflowDocument Workflow { get; init; }
 

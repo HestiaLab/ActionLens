@@ -7,7 +7,7 @@ namespace ActionLens.Core.Linting;
 /// documentation page that states the expectation. Both live here rather than on the rule itself so the
 /// eight rules read as one table, and so a rule that changes its mind cannot silently change its severity.
 /// </summary>
-public sealed record LintRuleDescriptor(string Id, DiagnosticSeverity Severity, string HelpLink);
+internal sealed record LintRuleDescriptor(string Id, DiagnosticSeverity Severity, string HelpLink);
 
 /// <summary>
 /// The AL001–AL008 table, in id order.
@@ -23,7 +23,7 @@ public sealed record LintRuleDescriptor(string Id, DiagnosticSeverity Severity, 
 /// <c>learn-github-actions</c> and <c>using-workflows</c> paths only redirect, so they are not linked.
 /// </para>
 /// </remarks>
-public static class LintRuleTable
+internal static class LintRuleTable
 {
     private const string Syntax = "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax";
     private const string Contexts = "https://docs.github.com/en/actions/reference/workflows-and-actions/contexts";

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using ActionLens.Core.Text;
 using ActionLens.Core.Values;
 
 namespace ActionLens.Core.Expressions;
@@ -21,7 +22,7 @@ namespace ActionLens.Core.Expressions;
 ///     that position, and GitHub would reject the workflow, so the reason says so.</item>
 /// </list>
 /// </remarks>
-public sealed class ExpressionEvaluator
+internal sealed class ExpressionEvaluator
 {
     private readonly IContextProvider _contexts;
 
@@ -51,6 +52,18 @@ public sealed class ExpressionEvaluator
     /// <summary>Coerces the result to a condition, keeping the reason when the value is unknown.</summary>
     public TriValue EvaluateCondition(ExpressionNode node) => Evaluate(node).ToCondition();
 
+    /// <summary>
+    /// Evaluates one operand and, when it is unknown, wraps the reason as a propagation through the
+    /// enclosing expression — the shape every link and operator shares.
+    /// </summary>
+    private Evaluated EvaluateOrPropagate(ExpressionNode operand, string text, SourceRange range)
+    {
+        var value = Evaluate(operand);
+        return value.IsKnown
+            ? value
+            : Evaluated.Unknown(UnknownReason.Propagating(text, range, value.Reason!));
+    }
+
     // ---------------------------------------------------------------- paths
 
     private Evaluated ResolveContext(ContextNode node)
@@ -60,18 +73,27 @@ public sealed class ExpressionEvaluator
             return Evaluated.Unknown(_contexts.ExplainUnavailable(node.Name) with { Symbol = node.Name });
         }
 
-        return _contexts.TryGetContext(node.Name, out var context)
-            ? Evaluated.Known(context)
-            : Evaluated.Unknown(_contexts.ExplainContextUnknown(node.Name));
+        if (!_contexts.TryGetContext(node.Name, out var context))
+        {
+            return Evaluated.Unknown(_contexts.ExplainContextUnknown(node.Name));
+        }
+
+        // The object shell, its type and its identity are known even when some members are not. Operations
+        // that inspect those members intercept the unknown below; truthiness and identity comparisons do not.
+        return Evaluated.Known(context);
     }
 
     private Evaluated EvaluateMember(MemberAccessNode node)
     {
-        var target = Evaluate(node.Target);
+        if (node.Target is ContextNode context && TryGetEnvMember(context, node.Name, out var member))
+        {
+            return member;
+        }
+
+        var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
         if (!target.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(
-                ExpressionTreeText.Render(node), node.Range, target.Reason!));
+            return target;
         }
 
         var value = target.Value!;
@@ -95,18 +117,38 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateIndex(IndexAccessNode node)
     {
-        var target = Evaluate(node.Target);
-        if (!target.IsKnown)
+        if (node.Target is ContextNode context
+            && string.Equals(context.Name, "env", StringComparison.OrdinalIgnoreCase)
+            && _contexts.IsAvailable(context.Name)
+            && _contexts is ICompositeContextProvider)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(
-                ExpressionTreeText.Render(node), node.Range, target.Reason!));
+            var envIndex = EvaluateOrPropagate(node.Index, "index", node.Range);
+            if (!envIndex.IsKnown)
+            {
+                return envIndex;
+            }
+
+            if (envIndex.Value!.Kind is GitHubValueKind.Array or GitHubValueKind.Object)
+            {
+                return Evaluated.Known(GitHubValue.Null);
+            }
+
+            if (TryGetEnvMember(context, envIndex.Value.Stringify(), out var envMember))
+            {
+                return envMember;
+            }
         }
 
-        var index = Evaluate(node.Index);
+        var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
+        if (!target.IsKnown)
+        {
+            return target;
+        }
+
+        var index = EvaluateOrPropagate(node.Index, "index", node.Range);
         if (!index.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(
-                "index", node.Range, index.Reason!));
+            return index;
         }
 
         var value = target.Value!;
@@ -132,11 +174,15 @@ public sealed class ExpressionEvaluator
     /// </summary>
     private Evaluated EvaluateWildcard(WildcardAccessNode node)
     {
-        var target = Evaluate(node.Target);
+        if (node.Target is ContextNode context && HasUnknownContext(context))
+        {
+            return Evaluated.Unknown(((ICompositeContextProvider)_contexts).ExplainUnknownMembers(context.Name));
+        }
+
+        var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
         if (!target.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(
-                ExpressionTreeText.Render(node), node.Range, target.Reason!));
+            return target;
         }
 
         var value = target.Value!;
@@ -154,6 +200,28 @@ public sealed class ExpressionEvaluator
         }
 
         return Evaluated.Known(GitHubValue.FromArray(value.Children.ToArray()));
+    }
+
+    private bool TryGetEnvMember(ContextNode context, string memberName, out Evaluated result)
+    {
+        result = default;
+        if (!string.Equals(context.Name, "env", StringComparison.OrdinalIgnoreCase)
+            || !_contexts.IsAvailable(context.Name)
+            || _contexts is not ICompositeContextProvider composite)
+        {
+            return false;
+        }
+
+        if (composite.TryGetUnknownMember(context.Name, memberName, out var reason))
+        {
+            result = Evaluated.Unknown(reason);
+            return true;
+        }
+
+        result = composite.TryGetKnownMember(context.Name, memberName, out var value)
+            ? Evaluated.Known(value)
+            : Evaluated.Known(GitHubValue.Null);
+        return true;
     }
 
     /// <summary>
@@ -193,10 +261,10 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateNot(UnaryNotNode node)
     {
-        var operand = Evaluate(node.Operand);
+        var operand = EvaluateOrPropagate(node.Operand, "!", node.Range);
         if (!operand.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating("!", node.Range, operand.Reason!));
+            return operand;
         }
 
         return Evaluated.Known(GitHubValue.FromBoolean(!operand.Value!.IsTruthy()));
@@ -255,16 +323,21 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateComparison(ComparisonNode node)
     {
-        var left = Evaluate(node.Left);
-        if (!left.IsKnown)
+        if (TryCompareUnknownComposite(node, out var comparison))
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(OperatorText(node.Operator), node.Range, left.Reason!));
+            return Evaluated.Known(GitHubValue.FromBoolean(comparison));
         }
 
-        var right = Evaluate(node.Right);
+        var left = EvaluateOrPropagate(node.Left, OperatorText(node.Operator), node.Range);
+        if (!left.IsKnown)
+        {
+            return left;
+        }
+
+        var right = EvaluateOrPropagate(node.Right, OperatorText(node.Operator), node.Range);
         if (!right.IsKnown)
         {
-            return Evaluated.Unknown(UnknownReason.Propagating(OperatorText(node.Operator), node.Range, right.Reason!));
+            return right;
         }
 
         var sameInstance = ReferenceEquals(left.Value, right.Value);
@@ -273,13 +346,61 @@ public sealed class ExpressionEvaluator
             ComparisonOperator.Equal => ExpressionCoercion.AreEqual(left.Value!, right.Value!, sameInstance),
             ComparisonOperator.NotEqual => ExpressionCoercion.NotEqual(left.Value!, right.Value!, sameInstance),
             ComparisonOperator.LessThan => ExpressionCoercion.LessThan(left.Value!, right.Value!),
-            ComparisonOperator.LessThanOrEqual => ExpressionCoercion.LessThanOrEqual(left.Value!, right.Value!),
+            ComparisonOperator.LessThanOrEqual => ExpressionCoercion.LessThanOrEqual(left.Value!, right.Value!, sameInstance),
             ComparisonOperator.GreaterThan => ExpressionCoercion.GreaterThan(left.Value!, right.Value!),
-            ComparisonOperator.GreaterThanOrEqual => ExpressionCoercion.GreaterThanOrEqual(left.Value!, right.Value!),
+            ComparisonOperator.GreaterThanOrEqual => ExpressionCoercion.GreaterThanOrEqual(left.Value!, right.Value!, sameInstance),
             _ => false,
         };
 
         return Evaluated.Known(GitHubValue.FromBoolean(result));
+    }
+
+    private bool TryCompareUnknownComposite(ComparisonNode node, out bool result)
+    {
+        result = false;
+        if (!HasUnknownContext(node.Left) && !HasUnknownContext(node.Right))
+        {
+            return false;
+        }
+
+        if (!TryGetShallowValue(node.Left, out var left) || !TryGetShallowValue(node.Right, out var right))
+        {
+            return false;
+        }
+
+        if (!IsComposite(left!) && !IsComposite(right!))
+        {
+            return false;
+        }
+
+        bool sameInstance = ReferenceEquals(left, right);
+        result = node.Operator switch
+        {
+            ComparisonOperator.Equal => sameInstance,
+            ComparisonOperator.NotEqual => !sameInstance,
+            ComparisonOperator.LessThanOrEqual => sameInstance,
+            ComparisonOperator.GreaterThanOrEqual => sameInstance,
+            _ => false,
+        };
+        return true;
+    }
+
+    private bool HasUnknownContext(ExpressionNode node) =>
+        node is ContextNode context
+        && _contexts.IsAvailable(context.Name)
+        && _contexts is ICompositeContextProvider composite
+        && composite.HasUnknownMembers(context.Name);
+
+    private bool TryGetShallowValue(ExpressionNode node, out GitHubValue? value)
+    {
+        value = node switch
+        {
+            ContextNode context when _contexts is ICompositeContextProvider composite
+                && composite.TryGetContextShell(context.Name, out var shell) => shell,
+            LiteralNode literal => literal.Value,
+            _ => null,
+        };
+        return value is not null;
     }
 
     private static string OperatorText(ComparisonOperator op) => op switch
@@ -299,6 +420,17 @@ public sealed class ExpressionEvaluator
         if (!_contexts.IsFunctionAvailable(node.Name))
         {
             return Evaluated.Unknown(_contexts.ExplainUnavailable(node.Name) with { Symbol = node.Name });
+        }
+
+        foreach (var argument in node.Arguments)
+        {
+            if (argument is ContextNode context && HasUnknownContext(context))
+            {
+                return Evaluated.Unknown(UnknownReason.Propagating(
+                    node.Name + "()",
+                    node.Range,
+                    ((ICompositeContextProvider)_contexts).ExplainUnknownMembers(context.Name)));
+            }
         }
 
         var arguments = new List<Evaluated>(node.Arguments.Count);
@@ -544,7 +676,7 @@ public sealed class ExpressionEvaluator
         try
         {
             using var document = System.Text.Json.JsonDocument.Parse(text);
-            return Evaluated.Known(JsonConverter.ToValue(document.RootElement));
+            return Evaluated.Known(JsonValueConverter.ToValue(document.RootElement));
         }
         catch (System.Text.Json.JsonException ex)
         {
@@ -658,33 +790,6 @@ public sealed class ExpressionEvaluator
                 UnknownReasonKind.InvalidSyntax,
                 $"'{node.Name}()' was called with the wrong number of arguments.",
                 node.Range));
-    }
-
-    /// <summary>Turns a parsed JSON document into a workflow value, for <c>fromJSON()</c>.</summary>
-    private static class JsonConverter
-    {
-        internal static GitHubValue ToValue(System.Text.Json.JsonElement element) => element.ValueKind switch
-        {
-            System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined => GitHubValue.Null,
-            System.Text.Json.JsonValueKind.True => GitHubValue.True,
-            System.Text.Json.JsonValueKind.False => GitHubValue.False,
-            System.Text.Json.JsonValueKind.String => GitHubValue.FromString(element.GetString() ?? string.Empty),
-            System.Text.Json.JsonValueKind.Number => GitHubValue.FromNumber(element.GetDouble()),
-            System.Text.Json.JsonValueKind.Array => GitHubValue.FromArray(
-                element.EnumerateArray().Select(ToValue).ToArray()),
-            _ => ToObject(element),
-        };
-
-        private static GitHubValue ToObject(System.Text.Json.JsonElement element)
-        {
-            var values = new Dictionary<string, GitHubValue>(StringComparer.Ordinal);
-            foreach (var property in element.EnumerateObject())
-            {
-                values[property.Name] = ToValue(property.Value);
-            }
-
-            return GitHubValue.FromObject(values);
-        }
     }
 
     /// <summary>Renders a value as the JSON text that <c>toJSON()</c> returns: two-space indentation.</summary>

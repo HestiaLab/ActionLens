@@ -22,7 +22,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// parses it, whatever this analysis decided to evaluate.
 /// </para>
 /// </remarks>
-public sealed class SecretsInConditionRule : ILintRule
+internal sealed class SecretsInConditionRule : ILintRule
 {
     /// <summary>
     /// The engine marks a context that is illegal in its position with the offending named value in

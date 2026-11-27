@@ -3,7 +3,7 @@ using ActionLens.Core.Text;
 namespace ActionLens.Core.Workflows;
 
 /// <summary>A job as written in the YAML, before any condition is evaluated.</summary>
-public sealed record JobDefinition
+internal sealed record JobDefinition
 {
     /// <summary>The key under <c>jobs:</c>.</summary>
     public required string Id { get; init; }
@@ -66,7 +66,7 @@ public sealed record JobDefinition
 /// <c>runs-on:</c> — one label, a list of labels, or an expression only a runner could resolve. In the
 /// last case the labels stay unresolved and say so instead of being guessed.
 /// </summary>
-public sealed record RunsOn
+internal sealed record RunsOn
 {
     public static RunsOn Missing { get; } = new() { IsPresent = false };
 
@@ -87,7 +87,7 @@ public sealed record RunsOn
 }
 
 /// <summary><c>strategy:</c> — the matrix plus the two knobs that change how failures spread.</summary>
-public sealed record StrategySection
+internal sealed record StrategySection
 {
     public MatrixSection? Matrix { get; init; }
 
@@ -99,7 +99,7 @@ public sealed record StrategySection
 }
 
 /// <summary><c>strategy.matrix:</c> as written. Turning it into combinations is <c>ActionLens.Core.Matrix</c>'s job.</summary>
-public sealed record MatrixSection
+internal sealed record MatrixSection
 {
     /// <summary>Named dimensions, in the order written.</summary>
     public IReadOnlyList<MatrixDimension> Dimensions { get; init; } = Array.Empty<MatrixDimension>();
@@ -115,7 +115,7 @@ public sealed record MatrixSection
 }
 
 /// <summary>One <c>strategy.matrix</c> dimension: a static list of values, or an expression.</summary>
-public sealed record MatrixDimension
+internal sealed record MatrixDimension
 {
     public required string Name { get; init; }
 

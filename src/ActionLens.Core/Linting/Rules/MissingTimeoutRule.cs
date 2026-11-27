@@ -12,7 +12,7 @@ namespace ActionLens.Core.Linting.Rules;
 /// job has no <c>timeout-minutes</c> key to write, so asking for one would be a finding nobody can fix.
 /// </para>
 /// </remarks>
-public sealed class MissingTimeoutRule : ILintRule
+internal sealed class MissingTimeoutRule : ILintRule
 {
     public LintRuleDescriptor Descriptor => LintRuleTable.MissingTimeout;
 

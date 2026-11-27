@@ -83,7 +83,7 @@ public sealed record MatrixRun
 }
 
 /// <summary>What the scenario decided about one job.</summary>
-public sealed record JobScenarioResult
+internal sealed record JobScenarioResult
 {
     public required string JobId { get; init; }
 
@@ -120,7 +120,7 @@ public sealed record JobScenarioResult
 /// The whole run the scenario describes: every job in document order, with its state, its condition
 /// trace and its steps, plus the findings the three positions made on the way.
 /// </summary>
-public sealed record ScenarioEvaluation
+internal sealed record ScenarioEvaluation
 {
     public required IReadOnlyList<JobScenarioResult> Jobs { get; init; }
 
