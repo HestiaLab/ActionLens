@@ -370,6 +370,21 @@ public static partial class TriggerEvaluator
         var compiled = FilterMatcher.CompileAll(values);
         var match = FilterMatcher.MatchAnyFile(compiled, files, mode);
         var deciding = match.DecidingPattern ?? compiled[0];
+        if (match.IsUnknown)
+        {
+            var unknownPattern = match.UnknownPattern ?? deciding;
+            var reason = new UnknownReason(
+                UnknownReasonKind.RuntimeFunction,
+                match.UnknownReason ?? $"The '{key}' matcher could not decide within its work budget.",
+                unknownPattern.Range);
+            decisions.Add(UnknownDecision(key, reason, unknownPattern.RawText, unknownPattern.Range, mode) with
+            {
+                Value = match.Value,
+                ValuesTested = files.Count,
+            });
+            return new Dimension(TriValue.Unknown(reason), false);
+        }
+
         if (payload.ChangedFilesFromCommits)
         {
             var partial = new UnknownReason(
@@ -446,8 +461,24 @@ public static partial class TriggerEvaluator
             return new Dimension(TriValue.Unknown(reason), false);
         }
 
-        var match = FilterMatcher.Match(FilterMatcher.CompileAll(patterns), value, mode);
+        var compiled = FilterMatcher.CompileAll(patterns);
+        var match = FilterMatcher.Match(compiled, value, mode);
         var deciding = match.DecidingPattern;
+        if (match.IsUnknown)
+        {
+            var unknownPattern = match.UnknownPattern ?? compiled[0];
+            var reason = new UnknownReason(
+                UnknownReasonKind.RuntimeFunction,
+                match.UnknownReason ?? $"The '{name}' matcher could not decide within its work budget.",
+                unknownPattern.Range);
+            decisions.Add(UnknownDecision(name, reason, unknownPattern.RawText, unknownPattern.Range, mode) with
+            {
+                Value = value,
+                ValuesTested = 1,
+            });
+            return new Dimension(TriValue.Unknown(reason), false);
+        }
+
         decisions.Add(new FilterDecision
         {
             Filter = name,

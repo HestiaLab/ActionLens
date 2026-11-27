@@ -96,3 +96,21 @@ public interface IContextProvider
     /// </summary>
     bool TryGetStatus(StatusFunction statusFunction, out TriValue value);
 }
+
+/// <summary>
+/// A context object whose declared members can be known, unknown, or absent independently. The public
+/// provider seam stays whole-context based; the scenario engine uses this internal refinement so an unknown
+/// env member is not mistaken for a missing one.
+/// </summary>
+internal interface ICompositeContextProvider
+{
+    bool HasUnknownMembers(string contextName);
+
+    bool TryGetContextShell(string contextName, out GitHubValue value);
+
+    UnknownReason ExplainUnknownMembers(string contextName);
+
+    bool TryGetKnownMember(string contextName, string memberName, out GitHubValue value);
+
+    bool TryGetUnknownMember(string contextName, string memberName, out UnknownReason reason);
+}

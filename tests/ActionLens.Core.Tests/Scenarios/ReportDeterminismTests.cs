@@ -198,6 +198,7 @@ public sealed class ReportDeterminismTests
             item => item.GetProperty("code").GetString() == "AL004");
         Assert.Equal("error", finding.GetProperty("severity").GetString());
         Assert.Equal("lint", finding.GetProperty("stage").GetString());
+        Assert.Equal("workflow", finding.GetProperty("source").GetString());
         Assert.Equal("gate", finding.GetProperty("scope").GetString());
         Assert.Contains("job-level if:", finding.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.StartsWith("https://docs.github.com/", finding.GetProperty("helpLink").GetString(), StringComparison.Ordinal);
@@ -205,6 +206,19 @@ public sealed class ReportDeterminismTests
 
         // Positions travel with findings, because a finding without one cannot be jumped to.
         Assert.NotEqual("?", finding.GetProperty("range").GetString());
+    }
+
+    [Fact]
+    public void Export_NamesThePayloadAsTheSourceOfPayloadDiagnostics()
+    {
+        var report = WorkflowAnalyzer.Analyze(Workflow, "export.yml", "{\n  \"event_name\": }");
+        using var document = JsonDocument.Parse(AnalysisReportJson.ToJson(report));
+
+        var finding = Assert.Single(
+            document.RootElement.GetProperty("diagnostics").EnumerateArray(),
+            item => item.GetProperty("source").GetString() == "event-payload");
+        Assert.Contains("event payload", finding.GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("2:", finding.GetProperty("range").GetString(), StringComparison.Ordinal);
     }
 
     private static readonly string[] TopLevelOrder =

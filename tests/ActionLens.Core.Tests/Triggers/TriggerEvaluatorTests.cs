@@ -497,6 +497,23 @@ public sealed class TriggerEvaluatorTests
         Assert.Contains("types", reason.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void AMatchBudgetExhaustion_LeavesTheTriggerUnknownWithThePatternNamed()
+    {
+        var pattern = string.Concat(Enumerable.Repeat("**a", 10)) + "b";
+        var branch = new string('a', 50) + "c";
+        var payload = JsonSerializer.Serialize(new { event_name = "push", @ref = "refs/heads/" + branch });
+        var study = Analyse("push", payload,
+            "  push:",
+            "    branches:",
+            $"      - '{pattern}'");
+
+        var reason = RunsReason(study);
+        Assert.Equal(UnknownReasonKind.RuntimeFunction, reason.Kind);
+        Assert.Contains("budget", reason.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(TriKind.Unknown, Decision(study, "branches").Result);
+    }
+
     // ------------------------------------------------------------------ forced unknowns
 
     [Fact]

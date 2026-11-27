@@ -103,4 +103,10 @@ public static partial class AnalysisReportJson
         DiagnosticStage.Lint => "lint",
         _ => "internal",
     };
+
+    private static string Text(DiagnosticSource source) => source switch
+    {
+        DiagnosticSource.EventPayload => "event-payload",
+        _ => "workflow",
+    };
 }

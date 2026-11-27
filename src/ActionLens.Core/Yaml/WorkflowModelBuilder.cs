@@ -530,30 +530,4 @@ internal sealed partial class WorkflowModelBuilder
         static int Distance(string left, string right) =>
             Math.Abs(left.Length - right.Length) + left.Zip(right).Count(pair => pair.First != pair.Second);
     }
-
-    /// <summary>
-    /// Finds raw nodes for a key known to be valid, looking through <c>&lt;&lt;</c> merge lists, for the
-    /// two matrix keys that are not dimensions.
-    /// </summary>
-    private static IReadOnlyList<YamlNode>? FindRaw(YamlMappingNode map, string name)
-    {
-        foreach (var child in map.Children)
-        {
-            if (child.Key is YamlScalarNode { Value: "<<" } && child.Value is YamlSequenceNode sequence)
-            {
-                foreach (var item in sequence.Children.OfType<YamlMappingNode>())
-                {
-                    var nested = FindRaw(item, name);
-                    if (nested is not null)
-                    {
-                        return nested;
-                    }
-                }
-            }
-        }
-
-        var direct = map.Children.FirstOrDefault(candidate =>
-            candidate.Key is YamlScalarNode scalar && (scalar.Value ?? string.Empty) == name);
-        return direct.Value is null ? null : new[] { direct.Value };
-    }
 }

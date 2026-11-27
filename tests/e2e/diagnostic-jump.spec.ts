@@ -1,5 +1,15 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { waitForAnalysis } from './helpers';
+
+async function cursorLine(page: Page, label: string): Promise<number | null> {
+  return page.evaluate(async (editorLabel) => {
+    const modulePath = '/js/dist/actionlens-editor.js';
+    const editor = await import(modulePath);
+    const content = document.querySelector<HTMLElement>(`.cm-content[aria-label="${editorLabel}"]`);
+    const host = content?.closest('.cm-editor')?.parentElement;
+    return host === null || host === undefined ? null : editor.getCursorLine(host);
+  }, label);
+}
 
 /**
  * Gate 2 / A1 (automated form): clicking a finding moves the editor to the
@@ -24,18 +34,22 @@ test('clicking a diagnostic moves the editor to its line', async ({ page }) => {
   const editor = page.locator('.cm-content').first();
   await expect(editor).toBeVisible({ timeout: 20_000 });
 
-  // CodeMirror marks the active line; read its line number from the gutter.
-  const activeLine = await page.evaluate(() => {
-    const active = document.querySelector('.cm-activeLine');
-    const gutter = active?.closest('.cm-line') ?? active;
-    return gutter?.textContent?.trim() ?? null;
-  });
-
-  // The jump must at least focus the editor. Where CodeMirror exposes an
-  // active-line element, assert the line number the finding named.
   await expect(editor).toBeFocused();
-  if (activeLine !== null) {
-    expect(activeLine.length).toBeGreaterThan(0);
-  }
-  expect(expectedLine).toBeGreaterThan(0);
+  await expect.poll(() => cursorLine(page, 'Workflow YAML')).toBe(expectedLine);
+});
+
+test('a payload diagnostic opens the payload editor at the JSON error line', async ({ page }) => {
+  await waitForAnalysis(page);
+  await page.getByRole('tab', { name: 'Event payload' }).click();
+
+  const payload = page.locator('.cm-content[aria-label="Event payload JSON"]');
+  await expect(payload).toBeVisible({ timeout: 20_000 });
+  await payload.fill('{\n  "event_name": }');
+
+  const finding = page.locator('.al-diagnostic').filter({ hasText: 'event payload is not readable JSON' }).first();
+  await expect(finding).toBeVisible({ timeout: 20_000 });
+  await finding.click();
+
+  await expect(payload).toBeFocused();
+  await expect.poll(() => cursorLine(page, 'Event payload JSON')).toBe(2);
 });

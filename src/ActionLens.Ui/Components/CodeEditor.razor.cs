@@ -53,6 +53,7 @@ public partial class CodeEditor : ComponentBase, IAsyncDisposable
     private DotNetObjectReference<EditorCallback>? _callback;
     private bool _attached;
     private bool _disposed;
+    private int _attachGeneration;
     private int _replaceToken;
 
     /// <summary>The surface actually on screen; the markup switches on it.</summary>
@@ -88,7 +89,13 @@ public partial class CodeEditor : ComponentBase, IAsyncDisposable
 
     private async Task AttachAsync()
     {
+        int generation = ++_attachGeneration;
         IJSObjectReference? module = await Module.GetAsync().ConfigureAwait(false);
+        if (_disposed || generation != _attachGeneration)
+        {
+            return;
+        }
+
         if (module is null)
         {
             Degrade(Module.FailureReason);
@@ -104,6 +111,12 @@ public partial class CodeEditor : ComponentBase, IAsyncDisposable
                 new EditorOptions(_text, Language, AriaLabel),
                 _callback).ConfigureAwait(false);
 
+            if (_disposed || generation != _attachGeneration)
+            {
+                await DiscardLateAttachmentAsync(module).ConfigureAwait(false);
+                return;
+            }
+
             if (!attached)
             {
                 Degrade("CodeMirror refused to start in this panel.");
@@ -115,8 +128,29 @@ public partial class CodeEditor : ComponentBase, IAsyncDisposable
         }
         catch (Exception exception) when (exception is JSException or InvalidOperationException or ObjectDisposedException)
         {
+            if (_disposed || generation != _attachGeneration)
+            {
+                await DiscardLateAttachmentAsync(module).ConfigureAwait(false);
+                return;
+            }
+
             Degrade(exception.Message);
         }
+    }
+
+    private async Task DiscardLateAttachmentAsync(IJSObjectReference module)
+    {
+        try
+        {
+            await module.InvokeVoidAsync("dispose", _host).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is JSException or InvalidOperationException or ObjectDisposedException)
+        {
+            // The late attach may have failed before creating a view.
+        }
+
+        _callback?.Dispose();
+        _callback = null;
     }
 
     private async Task PushTextAsync()
@@ -147,22 +181,22 @@ public partial class CodeEditor : ComponentBase, IAsyncDisposable
     /// </summary>
     /// <returns>True when the caret actually moved; false in the text-area fallback, where the caller
     /// announces the position as text instead.</returns>
-    public async Task<bool> RevealAsync(SourceRange range, string severity)
+    public async Task<EditorRevealResult?> RevealAsync(SourceRange range, string severity)
     {
         if (_disposed || !_attached || _surface != EditorSurface.CodeMirror || !range.IsKnown)
         {
-            return false;
+            return null;
         }
 
         IJSObjectReference? module = await Module.GetAsync().ConfigureAwait(false);
         if (module is null)
         {
-            return false;
+            return null;
         }
 
         try
         {
-            RevealResult? result = await module.InvokeAsync<RevealResult?>(
+            return await module.InvokeAsync<EditorRevealResult?>(
                 "reveal",
                 _host,
                 range.Start.Line,
@@ -170,11 +204,10 @@ public partial class CodeEditor : ComponentBase, IAsyncDisposable
                 range.End.Line,
                 range.End.Column,
                 severity).ConfigureAwait(false);
-            return result is not null;
         }
         catch (Exception exception) when (exception is JSException or InvalidOperationException or ObjectDisposedException)
         {
-            return false;
+            return null;
         }
     }
 
@@ -265,6 +298,7 @@ public partial class CodeEditor : ComponentBase, IAsyncDisposable
         }
 
         _disposed = true;
+        _attachGeneration++;
 
         if (_attached)
         {
@@ -297,9 +331,6 @@ public partial class CodeEditor : ComponentBase, IAsyncDisposable
 
     /// <summary>The options object the JS module expects (serialised camelCase by the interop layer).</summary>
     private sealed record EditorOptions(string Doc, string Language, string AriaLabel);
-
-    /// <summary>The clamped position JS actually moved to.</summary>
-    private sealed record RevealResult(int Line, int Column);
 
     /// <summary>
     /// The JS-callable side of the editor. Kept as a separate small object so the component's own

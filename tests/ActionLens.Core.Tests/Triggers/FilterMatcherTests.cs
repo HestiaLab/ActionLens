@@ -249,6 +249,36 @@ public sealed class FilterMatcherTests
         Assert.False(Matches("Program.cs", "src/Program.cs"));
     }
 
+    [Fact]
+    public void MatchBudgetExhaustion_IsUnknownRatherThanANonMatch()
+    {
+        var pattern = FilterPattern.Compile(string.Concat(Enumerable.Repeat("**a", 10)) + "b");
+        var value = new string('a', 50) + "c";
+
+        Assert.False(pattern.TryMatch(value, out var matched, out var exhausted));
+        Assert.False(matched);
+        Assert.True(exhausted);
+
+        var result = FilterMatcher.Match([pattern], value, FilterListMode.Include);
+        Assert.True(result.IsUnknown);
+        Assert.False(result.Satisfied);
+        Assert.Contains("budget", result.UnknownReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LaterDefiniteMatch_ClearsAnEarlierBudgetExhaustion()
+    {
+        var pathological = FilterPattern.Compile(string.Concat(Enumerable.Repeat("**a", 10)) + "b");
+        var value = new string('a', 50) + "c";
+        var exact = FilterPattern.Compile(value);
+
+        var result = FilterMatcher.Match([pathological, exact], value, FilterListMode.Include);
+
+        Assert.True(result.Satisfied);
+        Assert.False(result.IsUnknown);
+        Assert.Same(exact, result.DecidingPattern);
+    }
+
     // ------------------------------------------------------------------ list ordering
 
     private static FilterPattern[] Patterns(params string[] texts) =>

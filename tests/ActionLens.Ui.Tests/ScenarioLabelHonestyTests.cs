@@ -28,7 +28,7 @@ public sealed class ScenarioLabelHonestyTests
             builder.CloseComponent();
         });
 
-        cut.Find("#al-scenario").Change("2"); // 'build is skipped'
+        cut.Find("#al-scenario").Change("job:build:skipped");
 
         string summaryText = cut.Find(".al-summary").TextContent;
         Assert.Contains("build is skipped", summaryText, StringComparison.Ordinal);

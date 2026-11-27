@@ -23,7 +23,13 @@ public enum EditorTarget
 /// <param name="Range">The 1-based range from the report; <see cref="SourceRange.IsKnown"/> decides whether it can be honoured.</param>
 /// <param name="Diagnostic">The finding the reader clicked, for the announcement and the severity styling.</param>
 /// <param name="Token">Increments on every request so a repeat click on the same finding still moves the caret.</param>
-public sealed record DiagnosticJump(EditorTarget Target, SourceRange Range, Diagnostic? Diagnostic, long Token);
+/// <param name="InputRevision">The document revision the diagnostic coordinates belong to.</param>
+public sealed record DiagnosticJump(
+    EditorTarget Target,
+    SourceRange Range,
+    Diagnostic? Diagnostic,
+    long Token,
+    long InputRevision);
 
 /// <summary>
 /// The app's one mutable state: what the two editors hold, what the reader asked the engine about, and
@@ -47,6 +53,8 @@ public sealed class AnalysisSession : IDisposable
 
     private CancellationTokenSource? _debounce;
     private long _jumpToken;
+    private long _inputRevision;
+    private long _reportInputRevision;
 
     /// <summary>Raised whenever the state a panel reads changed, including at the start and end of an analysis.</summary>
     public event Action? Changed;
@@ -77,6 +85,9 @@ public sealed class AnalysisSession : IDisposable
 
     /// <summary>Set only if the engine threw, which is an ActionLens defect rather than a workflow problem.</summary>
     public string? LastEngineFailure { get; private set; }
+
+    /// <summary>Changes whenever editor text changes; a diagnostic jump is valid only for its report's revision.</summary>
+    public long InputRevision => _inputRevision;
 
     /// <summary>
     /// The job the reader picked, whether from the graph or from the inspector list.
@@ -131,6 +142,7 @@ public sealed class AnalysisSession : IDisposable
             PayloadText = text;
         }
 
+        _inputRevision++;
         ScheduleAnalysis();
     }
 
@@ -168,13 +180,28 @@ public sealed class AnalysisSession : IDisposable
         PayloadText = payload?.Json ?? string.Empty;
         TriggerEvent = triggerEvent;
         Scenario = Scenario.Default;
+        _inputRevision++;
         AnalyzeNow();
     }
 
-    /// <summary>Asks the shell to move an editor to a finding's position. A finding without a position is still announced.</summary>
-    public void RequestJump(EditorTarget target, SourceRange range, Diagnostic? diagnostic)
+    /// <summary>
+    /// Asks the shell to move an editor to a finding's position. Returns false when the document changed
+    /// after the report was produced, because the old coordinates can no longer be trusted.
+    /// </summary>
+    public bool RequestJump(EditorTarget target, SourceRange range, Diagnostic? diagnostic)
     {
-        JumpRequested?.Invoke(new DiagnosticJump(target, range, diagnostic, Interlocked.Increment(ref _jumpToken)));
+        if (_inputRevision != _reportInputRevision)
+        {
+            return false;
+        }
+
+        JumpRequested?.Invoke(new DiagnosticJump(
+            target,
+            range,
+            diagnostic,
+            Interlocked.Increment(ref _jumpToken),
+            _inputRevision));
+        return true;
     }
 
     /// <summary>
@@ -209,14 +236,20 @@ public sealed class AnalysisSession : IDisposable
             return [];
         }
 
-        List<ScenarioOption> options = [new("Every job succeeds", Scenario.Default)];
+        List<ScenarioOption> options = [new("default", "Every job succeeds", Scenario.Default)];
         foreach (JobReport job in report.Jobs)
         {
-            options.Add(new($"{job.JobId} fails", Scenario.Default.WithJobFailed(job.JobId)));
-            options.Add(new($"{job.JobId} is skipped", Scenario.Default.WithJobSkipped(job.JobId)));
+            options.Add(new($"job:{job.JobId}:failed", $"{job.JobId} fails", Scenario.Default.WithJobFailed(job.JobId)));
+            options.Add(new($"job:{job.JobId}:skipped", $"{job.JobId} is skipped", Scenario.Default.WithJobSkipped(job.JobId)));
         }
 
-        options.Add(new("The run was cancelled", Scenario.Default.WithWorkflowCancelled()));
+        options.Add(new("workflow-cancelled", "The run was cancelled", Scenario.Default.WithWorkflowCancelled()));
+        if (!options.Any(option => option.Matches(Scenario)))
+        {
+            string label = DescribeScenario(Scenario, report.Jobs.Select(job => job.JobId).ToArray());
+            options.Add(new("custom", label, Scenario));
+        }
+
         return options;
     }
 
@@ -305,6 +338,7 @@ public sealed class AnalysisSession : IDisposable
         }
 
         Report = report;
+        _reportInputRevision = _inputRevision;
 
         // A selection the new file does not have would leave the inspector highlighting nothing while the
         // canvas claims a job is picked, so the selection is dropped rather than quietly re-pointed.
@@ -327,9 +361,40 @@ public sealed class AnalysisSession : IDisposable
     }
 
     private void NotifyChanged() => Changed?.Invoke();
+
+    private static string DescribeScenario(Scenario scenario, IReadOnlyList<string> documentOrder)
+    {
+        string described = scenario.Describe(documentOrder);
+        var missing = scenario.JobStates.Keys
+            .Where(jobId => !documentOrder.Contains(jobId, StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .Select(jobId => $"{jobId} {scenario.JobStates[jobId] switch
+            {
+                ScenarioJobState.Fails => "fails",
+                ScenarioJobState.IsSkipped => "is skipped",
+                ScenarioJobState.IsCancelled => "is cancelled",
+                _ => "succeeds",
+            }}")
+            .ToArray();
+        if (missing.Length == 0)
+        {
+            return described;
+        }
+
+        return described == "every job succeeds"
+            ? string.Join("; ", missing)
+            : described + "; " + string.Join("; ", missing);
+    }
 }
 
 /// <summary>One entry in the scenario dropdown.</summary>
+/// <param name="Id">Stable identity across workflow edits and option-list changes.</param>
 /// <param name="Label">What the reader sees.</param>
 /// <param name="Scenario">The scenario it selects.</param>
-public sealed record ScenarioOption(string Label, Scenario Scenario);
+public sealed record ScenarioOption(string Id, string Label, Scenario Scenario)
+{
+    public bool Matches(Scenario scenario) =>
+        Scenario.WorkflowCancelled == scenario.WorkflowCancelled
+        && Scenario.JobStates.Count == scenario.JobStates.Count
+        && Scenario.JobStates.All(pair => scenario.JobStates.TryGetValue(pair.Key, out var state) && state == pair.Value);
+}

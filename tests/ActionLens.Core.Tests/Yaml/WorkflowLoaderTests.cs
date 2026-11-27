@@ -370,6 +370,85 @@ public sealed class WorkflowLoaderTests
         Assert.Equal("10:11", includeRange.Start.ToString());
     }
 
+    [Theory]
+    [InlineData("<<: *matrix")]
+    [InlineData("<<: [*matrix]")]
+    public void MatrixIncludeAndExcludeSurviveMergeKeys(string merge)
+    {
+        var yaml = $$"""
+            on: push
+            jobs:
+              base:
+                runs-on: x
+                strategy: &strategy
+                  matrix: &matrix
+                    os: [ubuntu, windows]
+                    include:
+                      - os: ubuntu
+                        coverage: true
+                    exclude:
+                      - os: windows
+                steps:
+                  - run: echo
+              merged:
+                runs-on: x
+                strategy:
+                  matrix:
+                    {{merge}}
+                steps:
+                  - run: echo
+            """;
+
+        var matrix = WorkflowLoader.Load(yaml, "w.yml").Workflow!.Jobs[1].Strategy!.Matrix!;
+
+        var include = Assert.Single(matrix.Include);
+        Assert.Equal(GitHubValue.True, include["coverage"].Value);
+        var exclude = Assert.Single(matrix.Exclude);
+        Assert.Equal("windows", exclude["os"].Value.String);
+    }
+
+    [Fact]
+    public void ExplicitMatrixKeysOverrideMergedIncludeAndExclude()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              base:
+                runs-on: x
+                strategy: &strategy
+                  matrix: &matrix
+                    os: [ubuntu, windows]
+                    include:
+                      - os: ubuntu
+                        coverage: true
+                    exclude:
+                      - os: windows
+                steps:
+                  - run: echo
+              merged:
+                runs-on: x
+                strategy:
+                  matrix:
+                    <<: *matrix
+                    os: [linux]
+                    include:
+                      - os: linux
+                        coverage: false
+                    exclude: []
+                steps:
+                  - run: echo
+            """;
+
+        var matrix = WorkflowLoader.Load(yaml, "w.yml").Workflow!.Jobs[1].Strategy!.Matrix!;
+
+        var dimension = Assert.Single(matrix.Dimensions);
+        Assert.Equal("os", dimension.Name);
+        Assert.Equal("linux", Assert.Single(dimension.Values!).Value.String);
+        var include = Assert.Single(matrix.Include);
+        Assert.Equal(GitHubValue.False, include["coverage"].Value);
+        Assert.Empty(matrix.Exclude);
+    }
+
     [Fact]
     public void MarksDynamicMatrixDimensionsInsteadOfGuessing()
     {

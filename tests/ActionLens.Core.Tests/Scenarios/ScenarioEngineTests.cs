@@ -486,6 +486,16 @@ public sealed class ScenarioEngineTests
         Assert.Equal(RunState.WillNotRun, Job(otherEvent, "gated").State);
     }
 
+    [Fact]
+    public void PayloadJsonError_CarriesItsSourceAndActualLineAndColumn()
+    {
+        var input = AnalysisInput.FromEventPayload("{\n  \"event_name\": }");
+        var finding = Assert.Single(input.Diagnostics);
+
+        Assert.Equal(DiagnosticSource.EventPayload, finding.Source);
+        Assert.Equal("2:17", finding.Range.Start.ToString());
+    }
+
     // ------------------------------------------------------------------ env inheritance
 
     [Fact]
@@ -575,9 +585,184 @@ public sealed class ScenarioEngineTests
         var report = Run(yaml);
 
         // `env` is legal in the position but not while an env value is being defined, so SECOND has no
-        // static value; the finding names the key rather than leaving the gap invisible.
+        // static value. A declared-but-unknown member is not the same as a missing member: reading it must
+        // stay unknown rather than collapse to null and make `!= ''` confidently false.
         Assert.Contains(report.Diagnostics, finding => finding.Code == DiagnosticCodes.ScenarioValueUnresolved);
-        Assert.Equal(RunState.WillNotRun, Step(report, "build", 0).State);
+        var step = Step(report, "build", 0);
+        Assert.Equal(RunState.Unknown, step.State);
+        Assert.Equal(TriKind.Unknown, step.Condition?.Result);
+        Assert.Contains(UnknownReasonKind.ContextNotAvailable, Kinds(step.Reason));
+    }
+
+    [Fact]
+    public void KnownEnvOverride_RemovesTheSupersededUnknownValueAndItsDiagnostic()
+    {
+        const string yaml = """
+            name: env-override
+            on: push
+            env:
+              FIRST: one
+              SECOND: ${{ env.FIRST }}
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                env:
+                  SECOND: two
+                steps:
+                  - run: echo gated
+                    if: env.SECOND == 'two'
+            """;
+
+        var report = Run(yaml);
+
+        Assert.Equal(RunState.WillRun, Step(report, "build", 0).State);
+        Assert.DoesNotContain(report.Diagnostics, finding => finding.Code == DiagnosticCodes.ScenarioValueUnresolved);
+    }
+
+    [Fact]
+    public void EnvValueFromStepOutput_StaysUnknownWithItsCause()
+    {
+        const string yaml = """
+            name: env-step-output
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: probe
+                    run: echo probe
+                  - run: echo gated
+                    if: env.FROM_OUTPUT != ''
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+            """;
+
+        var report = Run(yaml);
+        var step = Step(report, "build", 1);
+
+        Assert.Equal(RunState.Unknown, step.State);
+        Assert.Equal(TriKind.Unknown, step.Condition?.Result);
+        Assert.Contains("steps.probe.outputs.note", Text(step.Reason));
+    }
+
+    [Fact]
+    public void UnknownEnvMember_DoesNotHideKnownOrMissingMembers()
+    {
+        const string yaml = """
+            name: env-member-precision
+            on: push
+            env:
+              KNOWN: one
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: probe
+                    run: echo probe
+                  - run: echo known
+                    if: env.KNOWN == 'one'
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo missing
+                    if: env.MISSING == ''
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo unknown
+                    if: env.FROM_OUTPUT != ''
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+            """;
+
+        var report = Run(yaml);
+        var steps = Job(report, "build").Runs[0].Steps;
+
+        Assert.Equal(RunState.WillRun, steps[1].State);
+        Assert.Equal(RunState.WillRun, steps[2].State);
+        Assert.Equal(RunState.Unknown, steps[3].State);
+    }
+
+    [Fact]
+    public void EnvObjectIdentityAndNullComparisons_RemainDefiniteWithUnknownMembers()
+    {
+        const string yaml = """
+            name: env-object-comparison
+            on: push
+            env:
+              'false': known
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: probe
+                    run: echo probe
+                  - run: echo same
+                    if: env == env
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo not-null
+                    if: env != null
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo null-is-false
+                    if: env == null
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo ordered
+                    if: env <= env
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo truthy-object
+                    if: env
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo not-object
+                    if: '!env'
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo boolean-index
+                    if: env[false] == 'known'
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+                  - run: echo missing-index
+                    if: env[true] == ''
+                    env:
+                      FROM_OUTPUT: ${{ steps.probe.outputs.note }}
+            """;
+
+        var report = Run(yaml);
+        var steps = Job(report, "build").Runs[0].Steps;
+
+        Assert.Equal(RunState.WillRun, steps[1].State);
+        Assert.Equal(RunState.WillRun, steps[2].State);
+        Assert.Equal(RunState.WillNotRun, steps[3].State);
+        Assert.Equal(RunState.WillRun, steps[4].State);
+        Assert.Equal(RunState.WillRun, steps[5].State);
+        Assert.Equal(RunState.WillNotRun, steps[6].State);
+        Assert.Equal(RunState.WillRun, steps[7].State);
+        Assert.Equal(RunState.WillRun, steps[8].State);
+    }
+
+    [Fact]
+    public void CompositeValueComparedWithItself_IsTrueForOrderingOperators()
+    {
+        const string yaml = """
+            name: composite-comparison
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo same
+                    if: github.event >= github.event
+                  - run: echo same-too
+                    if: github.event <= github.event
+            """;
+
+        var report = Run(yaml, payload: "{}");
+        var job = Job(report, "build");
+
+        Assert.Equal(RunState.WillRun, job.Runs[0].Steps[0].State);
+        Assert.Equal(RunState.WillRun, job.Runs[0].Steps[1].State);
     }
 
     // ------------------------------------------------------------------ matrix instances

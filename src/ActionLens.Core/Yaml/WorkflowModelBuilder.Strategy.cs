@@ -101,12 +101,23 @@ internal sealed partial class WorkflowModelBuilder
         var sources = new SourceMap();
         var dimensions = new List<MatrixDimension>();
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Entry? includeEntry = null;
+        Entry? excludeEntry = null;
 
         foreach (var field in ReadMapping(map, allowedFields: null, scope: $"matrix of job '{jobId}'"))
         {
             if (field.Name is "include" or "exclude")
             {
                 sources.Set(field.Name, field.ValueRange);
+                if (field.Name == "include")
+                {
+                    includeEntry = field;
+                }
+                else
+                {
+                    excludeEntry = field;
+                }
+
                 continue;
             }
 
@@ -122,8 +133,12 @@ internal sealed partial class WorkflowModelBuilder
             dimensions.Add(BuildDimension(field, jobId));
         }
 
-        var include = ReadMatrixEntries(MatrixEntryNodes(FindRaw(map, "include")), $"include of job '{jobId}'");
-        var exclude = ReadMatrixEntries(MatrixEntryNodes(FindRaw(map, "exclude")), $"exclude of job '{jobId}'");
+        var include = ReadMatrixEntries(
+            MatrixEntryNodes(includeEntry is null ? null : [includeEntry.Value]),
+            $"include of job '{jobId}'");
+        var exclude = ReadMatrixEntries(
+            MatrixEntryNodes(excludeEntry is null ? null : [excludeEntry.Value]),
+            $"exclude of job '{jobId}'");
 
         return new MatrixSection
         {
@@ -169,11 +184,10 @@ internal sealed partial class WorkflowModelBuilder
     }
 
     /// <summary>
-    /// The nodes that are each one <c>include</c>/<c>exclude</c> entry. <see cref="FindRaw"/> returns the
-    /// field's own value, and both fields are written as a list, so the entries are that list's children —
-    /// handing the list over as if it were an entry made every real matrix look like one malformed entry and
-    /// silently dropped all of them. A mapping written directly under the key stays the single entry it
-    /// reads as.
+    /// The nodes that are each one <c>include</c>/<c>exclude</c> entry. Both fields are written as a list,
+    /// so the entries are that list's children — handing the list over as if it were an entry made every
+    /// real matrix look like one malformed entry and silently dropped all of them. A mapping written
+    /// directly under the key stays the single entry it reads as.
     /// </summary>
     private static IReadOnlyList<YamlNode>? MatrixEntryNodes(IReadOnlyList<YamlNode>? value) =>
         value is null

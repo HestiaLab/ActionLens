@@ -15,6 +15,7 @@ public sealed class PublicSurfaceTests
     [InlineData("ActionLens.Core.WorkflowAnalyzer")]
     [InlineData("ActionLens.Core.Reporting.AnalysisReport")]
     [InlineData("ActionLens.Core.Diagnostics.Diagnostic")]
+    [InlineData("ActionLens.Core.Diagnostics.DiagnosticSource")]
     [InlineData("ActionLens.Core.Scenarios.Scenario")]
     public void ContractTypes_ArePublic(string fullName)
     {

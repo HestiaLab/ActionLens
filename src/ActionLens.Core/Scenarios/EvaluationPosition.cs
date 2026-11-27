@@ -20,7 +20,7 @@ namespace ActionLens.Core.Scenarios;
 /// reason travels with the value in every unknown the evaluator produces.
 /// </para>
 /// </remarks>
-internal abstract class EvaluationPosition : IContextProvider
+internal abstract class EvaluationPosition : IContextProvider, ICompositeContextProvider
 {
     /// <summary>
     /// What <c>jobs.&lt;job_id&gt;.if</c> may read. <c>env</c>, <c>matrix</c>, <c>strategy</c>,
@@ -39,6 +39,8 @@ internal abstract class EvaluationPosition : IContextProvider
 
     private readonly Dictionary<string, GitHubValue> _known = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, UnknownReason> _unknown = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, UnknownReason> _unknownEnvMembers = new(StringComparer.OrdinalIgnoreCase);
+    private UnknownReason? _unknownEnvReason;
 
     protected EvaluationPosition(EvaluationScope scope, EvaluationPositionKind kind)
     {
@@ -112,6 +114,35 @@ internal abstract class EvaluationPosition : IContextProvider
                 UnknownReasonKind.RuntimeContext,
                 $"'{contextName}' describes work that only a run can report, and nothing has run.",
                 Scope.ConditionRange);
+
+    public bool HasUnknownMembers(string contextName) =>
+        string.Equals(contextName, "env", StringComparison.OrdinalIgnoreCase) && _unknownEnvMembers.Count > 0;
+
+    public bool TryGetContextShell(string contextName, out GitHubValue value) =>
+        _known.TryGetValue(contextName, out value!);
+
+    public UnknownReason ExplainUnknownMembers(string contextName) =>
+        string.Equals(contextName, "env", StringComparison.OrdinalIgnoreCase) && _unknownEnvReason is not null
+            ? _unknownEnvReason
+            : new UnknownReason(
+                UnknownReasonKind.ValueMissing,
+                $"Some members of '{contextName}' have no static value.",
+                Scope.ConditionRange);
+
+    public bool TryGetKnownMember(string contextName, string memberName, out GitHubValue value)
+    {
+        value = GitHubValue.Null;
+        return string.Equals(contextName, "env", StringComparison.OrdinalIgnoreCase)
+            && _known.TryGetValue(contextName, out var context)
+            && context.TryGetMember(GitHubValue.FromString(memberName), StringComparison.OrdinalIgnoreCase, out value);
+    }
+
+    public bool TryGetUnknownMember(string contextName, string memberName, out UnknownReason reason)
+    {
+        reason = ExplainUnknownMembers(contextName);
+        return string.Equals(contextName, "env", StringComparison.OrdinalIgnoreCase)
+            && _unknownEnvMembers.TryGetValue(memberName, out reason!);
+    }
 
     public UnknownReason ExplainUnavailable(string symbolName)
     {
@@ -368,13 +399,15 @@ internal abstract class EvaluationPosition : IContextProvider
 
     /// <summary>
     /// The workflow → job → step <c>env</c> chain, with each value resolved in the scope it is written in.
-    /// A value that only a run can produce is left out and reported: keeping it would mean inventing a
-    /// value, while dropping it silently would read as <c>null</c>, so the finding names the key.
+    /// A declared value that only a run can produce is kept as a member-level unknown: dropping it would
+    /// make a condition read <c>null</c>, while rejecting the whole context would hide unrelated known keys.
     /// </summary>
     private GitHubValue BuildEnvironment()
     {
         var chain = new Dictionary<string, GitHubValue>(StringComparer.Ordinal);
         var findings = new List<Diagnostic>();
+        var unresolved = new Dictionary<string, (string Owner, WorkflowValue Value, UnknownReason Reason)>(
+            StringComparer.OrdinalIgnoreCase);
         var seed = new EnvSeedContext(this);
         var evaluator = new ExpressionEvaluator(seed);
 
@@ -385,6 +418,34 @@ internal abstract class EvaluationPosition : IContextProvider
             Append(step.Env, $"step {step.Index + 1} of job '{Scope.Job.Id}'");
         }
 
+        _unknownEnvMembers.Clear();
+        foreach (var pair in unresolved)
+        {
+            _unknownEnvMembers[pair.Key] = pair.Value.Reason;
+
+            // Only the final value in the workflow → job → step chain earns a finding. A known step value
+            // supersedes an unknown job value, so reporting the earlier gap would describe a condition that
+            // the final env context can actually decide.
+            findings.Add(new Diagnostic
+            {
+                Code = DiagnosticCodes.ScenarioValueUnresolved,
+                Severity = DiagnosticSeverity.Info,
+                Stage = DiagnosticStage.Scenario,
+                Message = $"The value of '{pair.Key}' in the {pair.Value.Owner} env: has no static value: " +
+                    $"{pair.Value.Reason.Message} A condition reading env.{pair.Key} is therefore unknown.",
+                Range = pair.Value.Value.Range.IsKnown ? pair.Value.Value.Range : Scope.ConditionRange,
+                Scope = Scope.Job.Id,
+                Suggestion = "Supply the value the expression needs (an event payload, a matrix value) to see the condition resolve.",
+            });
+        }
+
+        _unknownEnvReason = unresolved.Count == 0
+            ? null
+            : new UnknownReason(
+                UnknownReasonKind.ValueMissing,
+                "The env context contains declared values that only a run can produce.",
+                Scope.ConditionRange,
+                [.. unresolved.Values.Select(value => value.Reason)]);
         Diagnostics = findings;
         return GitHubValue.FromObject(chain);
 
@@ -396,23 +457,17 @@ internal abstract class EvaluationPosition : IContextProvider
                 if (resolved.IsKnown)
                 {
                     chain[pair.Key] = resolved.Required;
+                    unresolved.Remove(pair.Key);
                     continue;
                 }
 
-                // The gap is named by the reason the value gave, so an env that reads a step output and an
-                // env that illegally reads env do not come back with the same sentence.
-                findings.Add(new Diagnostic
-                {
-                    Code = DiagnosticCodes.ScenarioValueUnresolved,
-                    Severity = DiagnosticSeverity.Info,
-                    Stage = DiagnosticStage.Scenario,
-                    Message = $"The value of '{pair.Key}' in the {owner} env: has no static value: " +
-                        $"{resolved.Reason?.Message} A condition reading env.{pair.Key} therefore sees nothing, " +
-                        "which is not the same as seeing an unknown.",
-                    Range = pair.Value.Range.IsKnown ? pair.Value.Range : Scope.ConditionRange,
-                    Scope = Scope.Job.Id,
-                    Suggestion = "Supply the value the expression needs (an event payload, a matrix value) to see the condition resolve.",
-                });
+                unresolved[pair.Key] = (
+                    owner,
+                    pair.Value,
+                    resolved.Reason ?? new UnknownReason(
+                        UnknownReasonKind.ValueMissing,
+                        "The value has no static resolution.",
+                        pair.Value.Range));
             }
         }
     }

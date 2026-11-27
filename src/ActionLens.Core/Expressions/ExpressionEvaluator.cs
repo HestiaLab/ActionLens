@@ -73,13 +73,23 @@ public sealed class ExpressionEvaluator
             return Evaluated.Unknown(_contexts.ExplainUnavailable(node.Name) with { Symbol = node.Name });
         }
 
-        return _contexts.TryGetContext(node.Name, out var context)
-            ? Evaluated.Known(context)
-            : Evaluated.Unknown(_contexts.ExplainContextUnknown(node.Name));
+        if (!_contexts.TryGetContext(node.Name, out var context))
+        {
+            return Evaluated.Unknown(_contexts.ExplainContextUnknown(node.Name));
+        }
+
+        // The object shell, its type and its identity are known even when some members are not. Operations
+        // that inspect those members intercept the unknown below; truthiness and identity comparisons do not.
+        return Evaluated.Known(context);
     }
 
     private Evaluated EvaluateMember(MemberAccessNode node)
     {
+        if (node.Target is ContextNode context && TryGetEnvMember(context, node.Name, out var member))
+        {
+            return member;
+        }
+
         var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
         if (!target.IsKnown)
         {
@@ -107,6 +117,28 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateIndex(IndexAccessNode node)
     {
+        if (node.Target is ContextNode context
+            && string.Equals(context.Name, "env", StringComparison.OrdinalIgnoreCase)
+            && _contexts.IsAvailable(context.Name)
+            && _contexts is ICompositeContextProvider)
+        {
+            var envIndex = EvaluateOrPropagate(node.Index, "index", node.Range);
+            if (!envIndex.IsKnown)
+            {
+                return envIndex;
+            }
+
+            if (envIndex.Value!.Kind is GitHubValueKind.Array or GitHubValueKind.Object)
+            {
+                return Evaluated.Known(GitHubValue.Null);
+            }
+
+            if (TryGetEnvMember(context, envIndex.Value.Stringify(), out var envMember))
+            {
+                return envMember;
+            }
+        }
+
         var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
         if (!target.IsKnown)
         {
@@ -142,6 +174,11 @@ public sealed class ExpressionEvaluator
     /// </summary>
     private Evaluated EvaluateWildcard(WildcardAccessNode node)
     {
+        if (node.Target is ContextNode context && HasUnknownContext(context))
+        {
+            return Evaluated.Unknown(((ICompositeContextProvider)_contexts).ExplainUnknownMembers(context.Name));
+        }
+
         var target = EvaluateOrPropagate(node.Target, ExpressionTreeText.Render(node), node.Range);
         if (!target.IsKnown)
         {
@@ -163,6 +200,28 @@ public sealed class ExpressionEvaluator
         }
 
         return Evaluated.Known(GitHubValue.FromArray(value.Children.ToArray()));
+    }
+
+    private bool TryGetEnvMember(ContextNode context, string memberName, out Evaluated result)
+    {
+        result = default;
+        if (!string.Equals(context.Name, "env", StringComparison.OrdinalIgnoreCase)
+            || !_contexts.IsAvailable(context.Name)
+            || _contexts is not ICompositeContextProvider composite)
+        {
+            return false;
+        }
+
+        if (composite.TryGetUnknownMember(context.Name, memberName, out var reason))
+        {
+            result = Evaluated.Unknown(reason);
+            return true;
+        }
+
+        result = composite.TryGetKnownMember(context.Name, memberName, out var value)
+            ? Evaluated.Known(value)
+            : Evaluated.Known(GitHubValue.Null);
+        return true;
     }
 
     /// <summary>
@@ -264,6 +323,11 @@ public sealed class ExpressionEvaluator
 
     private Evaluated EvaluateComparison(ComparisonNode node)
     {
+        if (TryCompareUnknownComposite(node, out var comparison))
+        {
+            return Evaluated.Known(GitHubValue.FromBoolean(comparison));
+        }
+
         var left = EvaluateOrPropagate(node.Left, OperatorText(node.Operator), node.Range);
         if (!left.IsKnown)
         {
@@ -282,13 +346,61 @@ public sealed class ExpressionEvaluator
             ComparisonOperator.Equal => ExpressionCoercion.AreEqual(left.Value!, right.Value!, sameInstance),
             ComparisonOperator.NotEqual => ExpressionCoercion.NotEqual(left.Value!, right.Value!, sameInstance),
             ComparisonOperator.LessThan => ExpressionCoercion.LessThan(left.Value!, right.Value!),
-            ComparisonOperator.LessThanOrEqual => ExpressionCoercion.LessThanOrEqual(left.Value!, right.Value!),
+            ComparisonOperator.LessThanOrEqual => ExpressionCoercion.LessThanOrEqual(left.Value!, right.Value!, sameInstance),
             ComparisonOperator.GreaterThan => ExpressionCoercion.GreaterThan(left.Value!, right.Value!),
-            ComparisonOperator.GreaterThanOrEqual => ExpressionCoercion.GreaterThanOrEqual(left.Value!, right.Value!),
+            ComparisonOperator.GreaterThanOrEqual => ExpressionCoercion.GreaterThanOrEqual(left.Value!, right.Value!, sameInstance),
             _ => false,
         };
 
         return Evaluated.Known(GitHubValue.FromBoolean(result));
+    }
+
+    private bool TryCompareUnknownComposite(ComparisonNode node, out bool result)
+    {
+        result = false;
+        if (!HasUnknownContext(node.Left) && !HasUnknownContext(node.Right))
+        {
+            return false;
+        }
+
+        if (!TryGetShallowValue(node.Left, out var left) || !TryGetShallowValue(node.Right, out var right))
+        {
+            return false;
+        }
+
+        if (!IsComposite(left!) && !IsComposite(right!))
+        {
+            return false;
+        }
+
+        bool sameInstance = ReferenceEquals(left, right);
+        result = node.Operator switch
+        {
+            ComparisonOperator.Equal => sameInstance,
+            ComparisonOperator.NotEqual => !sameInstance,
+            ComparisonOperator.LessThanOrEqual => sameInstance,
+            ComparisonOperator.GreaterThanOrEqual => sameInstance,
+            _ => false,
+        };
+        return true;
+    }
+
+    private bool HasUnknownContext(ExpressionNode node) =>
+        node is ContextNode context
+        && _contexts.IsAvailable(context.Name)
+        && _contexts is ICompositeContextProvider composite
+        && composite.HasUnknownMembers(context.Name);
+
+    private bool TryGetShallowValue(ExpressionNode node, out GitHubValue? value)
+    {
+        value = node switch
+        {
+            ContextNode context when _contexts is ICompositeContextProvider composite
+                && composite.TryGetContextShell(context.Name, out var shell) => shell,
+            LiteralNode literal => literal.Value,
+            _ => null,
+        };
+        return value is not null;
     }
 
     private static string OperatorText(ComparisonOperator op) => op switch
@@ -308,6 +420,17 @@ public sealed class ExpressionEvaluator
         if (!_contexts.IsFunctionAvailable(node.Name))
         {
             return Evaluated.Unknown(_contexts.ExplainUnavailable(node.Name) with { Symbol = node.Name });
+        }
+
+        foreach (var argument in node.Arguments)
+        {
+            if (argument is ContextNode context && HasUnknownContext(context))
+            {
+                return Evaluated.Unknown(UnknownReason.Propagating(
+                    node.Name + "()",
+                    node.Range,
+                    ((ICompositeContextProvider)_contexts).ExplainUnknownMembers(context.Name)));
+            }
         }
 
         var arguments = new List<Evaluated>(node.Arguments.Count);

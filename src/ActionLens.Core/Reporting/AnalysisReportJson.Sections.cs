@@ -379,6 +379,7 @@ public static partial class AnalysisReportJson
         writer.WriteString("code", diagnostic.Code);
         writer.WriteString("severity", Text(diagnostic.Severity));
         writer.WriteString("stage", Text(diagnostic.Stage));
+        writer.WriteString("source", Text(diagnostic.Source));
         writer.WriteString("message", diagnostic.Message);
         writer.WriteString("range", RangeText(diagnostic.Range));
         WriteNullable(writer, "suggestion", diagnostic.Suggestion);

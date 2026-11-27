@@ -184,7 +184,7 @@ public partial class ActionLensWorkspace : ComponentBase, IAsyncDisposable
 
         if (!jump.Range.IsKnown)
         {
-            _announcement = Describe(jump, moved: false);
+            _announcement = Describe(jump, position: null);
             await InvokeAsync(StateHasChanged);
             return;
         }
@@ -199,14 +199,17 @@ public partial class ActionLensWorkspace : ComponentBase, IAsyncDisposable
             }
 
             CodeEditor? editor = jump.Target == EditorTarget.Workflow ? _workflowEditor : _payloadEditor;
-            if (editor is not null && await editor.RevealAsync(jump.Range, severity).ConfigureAwait(false))
+            EditorRevealResult? revealed = editor is null
+                ? null
+                : await editor.RevealAsync(jump.Range, severity).ConfigureAwait(false);
+            if (revealed is not null)
             {
                 if (Superseded(jump))
                 {
                     return;
                 }
 
-                _announcement = Describe(jump, moved: true);
+                _announcement = Describe(jump, revealed);
                 await InvokeAsync(StateHasChanged);
                 return;
             }
@@ -220,12 +223,13 @@ public partial class ActionLensWorkspace : ComponentBase, IAsyncDisposable
         }
 
         _announcement = jump.Range.IsKnown
-            ? $"{Describe(jump, moved: false)} The editor surface did not become ready; the text area fallback cannot move the caret."
-            : Describe(jump, moved: false);
+            ? $"{Describe(jump, position: null)} The editor surface did not become ready; the text area fallback cannot move the caret."
+            : Describe(jump, position: null);
         await InvokeAsync(StateHasChanged);
     }
 
-    private bool Superseded(DiagnosticJump jump) => _disposed || jump.Token != _lastJumpToken;
+    private bool Superseded(DiagnosticJump jump) =>
+        _disposed || jump.Token != _lastJumpToken || jump.InputRevision != Session.InputRevision;
 
     private async Task ActivateEditorAsync(EditorTarget target)
     {
@@ -305,19 +309,18 @@ public partial class ActionLensWorkspace : ComponentBase, IAsyncDisposable
         await InvokeAsync(StateHasChanged);
     }
 
-    private static string Describe(DiagnosticJump jump, bool moved)
+    private static string Describe(DiagnosticJump jump, EditorRevealResult? position)
     {
         if (jump.Diagnostic is not { } finding)
         {
-            return moved
-                ? $"Moved the editor to line {jump.Range.Start.Line}, column {jump.Range.Start.Column}."
+            return position is not null
+                ? $"Moved the editor to line {position.Line}, column {position.Column}."
                 : $"Could not move the editor to line {jump.Range.Start.Line}, column {jump.Range.Start.Column}.";
         }
 
-        string prefix = moved
-            ? $"{ReportPresentation.SeverityLabel(finding.Severity)} {finding.Code}: editor moved to line {jump.Range.Start.Line}, column {jump.Range.Start.Column}."
+        return position is not null
+            ? $"{ReportPresentation.SeverityLabel(finding.Severity)} {finding.Code}: editor moved to line {position.Line}, column {position.Column}."
             : $"{ReportPresentation.SeverityLabel(finding.Severity)} {finding.Code}: the editor could not be moved to line {jump.Range.Start.Line}, column {jump.Range.Start.Column}.";
-        return prefix;
     }
 
     private async Task DisposeWorkspaceAsync()

@@ -90,10 +90,13 @@
 
     private void Open(Diagnostic finding)
     {
-        Session.RequestJump(EditorTarget.Workflow, finding.Range, finding);
-        _announcement = finding.Range.IsKnown
-            ? $"{ReportPresentation.SeverityLabel(finding.Severity)} {finding.Code}, moved the editor to line {finding.Range.Start.Line}, column {finding.Range.Start.Column}."
-            : $"{ReportPresentation.SeverityLabel(finding.Severity)} {finding.Code}. This finding carries no position, so there is nowhere to move.";
+        EditorTarget target = finding.Source == DiagnosticSource.EventPayload
+            ? EditorTarget.Payload
+            : EditorTarget.Workflow;
+        if (!Session.RequestJump(target, finding.Range, finding))
+        {
+            _announcement = $"{finding.Code} belongs to the previous document. Wait for the new analysis before jumping to it.";
+        }
     }
 
     /// <summary>Moves focus to the first finding, for the Ctrl+Alt+3 chord. False when the list is empty.</summary>

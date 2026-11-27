@@ -113,6 +113,7 @@ public sealed record AnalysisInput
                 Code = DiagnosticCodes.YamlSizeLimit,
                 Severity = DiagnosticSeverity.Error,
                 Stage = DiagnosticStage.Scenario,
+                Source = DiagnosticSource.EventPayload,
                 Message = $"The event payload is {bytes:N0} bytes, above the {MaxPayloadBytes:N0} byte limit ActionLens reads.",
                 Range = range,
                 Suggestion = "Paste only the fields the condition reads, or a trimmed recorded event.",
@@ -132,8 +133,9 @@ public sealed record AnalysisInput
                 Code = DiagnosticCodes.InvalidValue,
                 Severity = DiagnosticSeverity.Warning,
                 Stage = DiagnosticStage.Scenario,
+                Source = DiagnosticSource.EventPayload,
                 Message = $"The event payload is not readable JSON, so no github context was derived: {ex.Message}",
-                Range = range,
+                Range = new SourceRange(new SourcePosition((int)(ex.LineNumber ?? 0) + 1, (int)(ex.BytePositionInLine ?? 0) + 1)),
                 Suggestion = "Paste the event body as one JSON object, e.g. {\"event_name\":\"push\",\"ref\":\"refs/heads/main\"}.",
             });
             return new AnalysisInput { Diagnostics = diagnostics };
@@ -157,6 +159,7 @@ public sealed record AnalysisInput
                 Code = DiagnosticCodes.InvalidValue,
                 Severity = DiagnosticSeverity.Warning,
                 Stage = DiagnosticStage.Scenario,
+                Source = DiagnosticSource.EventPayload,
                 Message = $"The event payload is {Describe(root)}, not a JSON object, so no github context was derived.",
                 Range = new SourceRange(new SourcePosition(1, 1)),
                 Suggestion = "GitHub's event payloads are always one object; paste the body rather than a value.",

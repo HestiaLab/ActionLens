@@ -15,9 +15,8 @@ repository is live at `HestiaLab/ActionLens`, with `dev` as the integration bran
 stable branch. Gate 1 passed 2026-11-04; **Gate 2** below is the condition for the first release and
 Pages deployment.
 
-All work currently lands on `dev` through reviewed pull requests. Merging `dev` into `main` is on hold
-until the remaining tasks below are resolved, and whether to do it at all is a decision for then;
-`main` therefore still sits at the initial commit.
+All work currently lands on `dev` through reviewed pull requests. `main` is the stable branch and has
+passed Gate 2; no release or Pages deployment has been performed yet.
 
 ### Gate 2 — the release gate
 
@@ -25,7 +24,7 @@ Gate 2 is all of the following, run locally first and then in `.github/workflows
 
 1. `dotnet build ActionLens.sln -v q --nologo` → 0 errors, 0 warnings.
 2. `dotnet format ActionLens.sln --verify-no-changes` → exit code 0.
-3. Both xUnit v3 / Microsoft.Testing.Platform assemblies green (run the built `.exe` files directly,
+3. All three xUnit v3 / Microsoft.Testing.Platform assemblies green (run the built `.exe` files directly,
    see `CONTRIBUTING.md`; `dotnet test` is not supported on this SDK).
 4. `DocFactsTests` green: corpus shape, Markdown links and ADR/deferred consistency.
 5. The whole Playwright suite green: boot without console errors and all assets 200, resource hosts all
@@ -47,8 +46,25 @@ at `9eecd18` (run `42157114755`). No release, no Pages deployment and no "verifi
 follows from a green run alone — publishing remains an explicit act. Gate 1's engine decision was
 never a release decision.
 
+### Fixed — correctness, lifecycle and verification gaps (2026-11-27)
+
+- Preserved member-level `unknown` for declared env values, including whole-env reads, instead of turning
+  missing runtime data into `null` and a definite false condition.
+- Corrected composite `<=` / `>=` identity semantics, matrix `include` / `exclude` through merge keys,
+  filter-budget exhaustion (`unknown` instead of a definite non-match), and AL003 coverage for
+  event-derived `github.ref`.
+- Kept late CodeMirror attaches from surviving component disposal, bound diagnostic jumps to the document
+  revision and actual cursor position, routed payload diagnostics to the payload editor, and stabilized
+  scenario selection across job removal and reordering.
+- Restored portable clean installs by locking every esbuild platform package, added the editor build script
+  and lockfile to MSBuild incremental inputs, and strengthened Playwright assertions for diagnostic lines
+  and analysis-time network silence.
+- Corrected stale Gate 2, test-command, deferred-ADR and public-surface documentation.
+
 ### Added
 
+- Diagnostic exports now name the source document (`workflow` or `event-payload`), so payload ranges stay
+  interpretable outside the UI.
 - `ActionLens.Core`, pure C# with no Blazor, JS interop or network dependency:
   - two-pass YAML reading — a token-level safety pass bounding size, documents, anchors, nesting depth and
     duplicate keys, then the object graph with 1-based line/column positions and YAML 1.1 type resolution
@@ -119,9 +135,10 @@ because a public signature references it) was restored. Three iterations converg
 - 27 types are now internal: `ScenarioEngine`, `LintEngine`, the eight lint rule implementations,
   `ScenarioEvaluation`/`JobScenarioResult`, `ConditionEvaluator`, `ExpressionFunctions`, expression
   node subtypes, `EvaluationScope` and friends.
-- 15 stay public because they *are* the contract: `ExpressionNode`, `ILintRule`, the lint result
-  types, `MatrixCombination`/`MatrixRun`, `JobGraphEdge`/`JobGraphAnalysisResult`, `StepDefinition`,
-  `DefaultsSection`, `ConcurrencySection`, `WorkflowInput`, `TemplateSegment`.
+- 15 stayed public in that pass because they *are* consumed contract types: `ExpressionNode`,
+  `ILintRule`, the lint result types, `MatrixCombination`/`MatrixRun`,
+  `JobGraphEdge`/`JobGraphAnalysisResult`, `StepDefinition`, `DefaultsSection`, `ConcurrencySection`,
+  `WorkflowInput`, `TemplateSegment`. This was a narrowing decision, not an exhaustive export allowlist.
 - `PublicSurfaceTests` (11 assertions) pins the boundary against a future "just make it public" edit;
   the compiler already enforces the opposite direction.
 

@@ -235,6 +235,12 @@ export function getText(element: HTMLElement): string {
   return views.get(element)?.view.state.doc.toString() ?? '';
 }
 
+/** Returns the editor's current 1-based cursor line for browser-level diagnostic assertions. */
+export function getCursorLine(element: HTMLElement): number | null {
+  const view = views.get(element)?.view;
+  return view === undefined ? null : view.state.doc.lineAt(view.state.selection.main.head).number;
+}
+
 /**
  * Moves the cursor to a 1-based line/column, centres it, focuses the editor and marks the affected lines.
  *

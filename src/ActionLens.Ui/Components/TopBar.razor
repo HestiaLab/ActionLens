@@ -38,10 +38,9 @@
         <span class="al-field">
             <label for="al-scenario">Scenario</label>
             <select id="al-scenario" @bind="_selectedScenario" @bind:after="ApplyScenario">
-                @for (var index = 0; index < _scenarios.Count; index++)
+                @foreach (ScenarioOption option in _scenarios)
                 {
-                    ScenarioOption option = _scenarios[index];
-                    <option value="@index">@option.Label</option>
+                    <option value="@option.Id">@option.Label</option>
                 }
             </select>
         </span>
@@ -59,7 +58,7 @@
 
     private IReadOnlyList<string> _events = [];
     private IReadOnlyList<ScenarioOption> _scenarios = [];
-    private int _selectedScenario;
+    private string _selectedScenario = string.Empty;
     private string _selectedExample = string.Empty;
     private string _selectedEvent = string.Empty;
 
@@ -90,10 +89,9 @@
         // instead of leaving it displaying something the analysis never used.
         _selectedExample = Session.FileName;
         _selectedEvent = Session.TriggerEvent ?? string.Empty;
-        if (_selectedScenario >= _scenarios.Count)
-        {
-            _selectedScenario = 0;
-        }
+        _selectedScenario = _scenarios.FirstOrDefault(option => option.Matches(Session.Scenario))?.Id
+            ?? _scenarios.FirstOrDefault()?.Id
+            ?? string.Empty;
     }
 
     private void ApplyExample()
@@ -106,7 +104,7 @@
             return;
         }
 
-        _selectedScenario = 0;
+        _selectedScenario = "default";
         Session.LoadExample(example, WorkflowExamples.PayloadFor(null), triggerEvent: null);
     }
 
@@ -116,18 +114,19 @@
     }
 
     /// <summary>
-    /// Runs after <c>@bind</c> has written the new index into <see cref="_selectedScenario"/>. The index is
-    /// clamped rather than trusted because <see cref="RefreshChoices"/> can shorten the list between the
-    /// render and this callback.
+    /// Runs after <c>@bind</c> has written the stable scenario id. The list can change between render and
+    /// callback, so an unknown id snaps back to the scenario the session is actually using.
     /// </summary>
     private void ApplyScenario()
     {
-        if (_selectedScenario < 0 || _selectedScenario >= _scenarios.Count)
+        ScenarioOption? selected = _scenarios.FirstOrDefault(option =>
+            string.Equals(option.Id, _selectedScenario, StringComparison.Ordinal));
+        if (selected is null)
         {
-            _selectedScenario = 0;
+            RefreshChoices();
             return;
         }
 
-        Session.SelectScenario(_scenarios[_selectedScenario].Scenario);
+        Session.SelectScenario(selected.Scenario);
     }
 }

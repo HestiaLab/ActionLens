@@ -30,13 +30,35 @@ test('boots with no console errors and all assets load', async ({ page }) => {
  * the browser can prove no request left the page during an analysis run.
  */
 test('every resource request stays on the same origin', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
   await waitForAnalysis(page);
 
   const hosts = await resourceHosts(page);
   const own = await page.evaluate(() => location.host);
+  const initialRequestCount = requests.length;
 
   expect(hosts.length).toBeGreaterThan(0);
   expect([...new Set(hosts)]).toEqual([own]);
+
+  const status = page.locator('.al-statusbar');
+  const editor = page.locator('.cm-content[aria-label="Workflow YAML"]');
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+Home');
+  await page.keyboard.type('X');
+  await expect(status).toContainText('Analysing');
+  await expect(status).not.toContainText('Analysing');
+
+  const select = page.locator('#al-example');
+  const options = await select.locator('option').evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLOptionElement).value),
+  );
+  await select.selectOption(options[1]);
+  await expect(select).toHaveValue(options[1]);
+  await expect(status).not.toContainText('Analysing');
+
+  expect(requests.slice(initialRequestCount)).toEqual([]);
+  expect(requests.filter((url) => new URL(url).host !== own)).toEqual([]);
 });
 
 /**

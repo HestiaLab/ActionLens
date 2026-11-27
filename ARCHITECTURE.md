@@ -155,7 +155,8 @@ remains a separate, explicit act.
    theme switching, the matrix table, richer DAG interaction. These are not in `ADR 0003` any more;
    see that ADR's "Deferred" table.
 4. **Structural cleanup, after the functional freeze** — done in three batches: the duplicated
-   Levenshtein / JSON-to-value conversions were folded into shared helpers, the public surface was
-   narrowed to the 15 contract types, and the four longest Core files were split into partials
-   (`docs/review-v1-grill.md` §§16–18). What remains is not structural: the first Pages deployment
-   and the first release are still explicit, unperformed acts.
+   Levenshtein / JSON-to-value conversions were folded into shared helpers, internal implementation
+   types were narrowed out of the public surface, and the four longest Core files were split into
+   partials (`docs/review-v1-grill.md` §§16–18). `PublicSurfaceTests` pins the key contract and
+   internal boundaries; it is not an exhaustive allowlist. The first Pages deployment and the first
+   release are still explicit, unperformed acts.
