@@ -48,7 +48,7 @@ public sealed record LayoutEdge
 /// <c>a -&gt; d</c>, a BFS depth would put <c>d</c> in layer 1, right next to a job it cannot start
 /// before. An arrow then crosses a node that runs later, and the chart stops being a schedule.
 /// </remarks>
-public sealed class LayeredLayout
+internal sealed class LayeredLayout
 {
     private LayeredLayout(LayoutNode[] nodes, LayoutEdge[] edges, int[] layerWidths, string[] excludedJobs)
     {

@@ -3,7 +3,7 @@ using ActionLens.Core.Workflows;
 
 namespace ActionLens.Core.Triggers;
 
-public static partial class TriggerEvaluator
+internal static partial class TriggerEvaluator
 {
     // ------------------------------------------------------------------ the verdict
 

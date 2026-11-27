@@ -22,7 +22,7 @@ namespace ActionLens.Core.Expressions;
 ///     that position, and GitHub would reject the workflow, so the reason says so.</item>
 /// </list>
 /// </remarks>
-public sealed class ExpressionEvaluator
+internal sealed class ExpressionEvaluator
 {
     private readonly IContextProvider _contexts;
 

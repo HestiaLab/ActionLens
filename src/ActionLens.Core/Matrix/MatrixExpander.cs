@@ -7,7 +7,7 @@ using ActionLens.Core.Workflows;
 namespace ActionLens.Core.Matrix;
 
 /// <summary>One expanded matrix combination, with the values that name it.</summary>
-public sealed record MatrixCombination
+internal sealed record MatrixCombination
 {
     /// <summary>Position within the expansion, used to label jobs and matrix rows.</summary>
     public required int Index { get; init; }
@@ -45,7 +45,7 @@ public sealed record MatrixCombination
 /// The result of expanding one job's matrix: the combinations that will run, or an honest statement
 /// that the answer only exists at runtime.
 /// </summary>
-public sealed record MatrixExpansion
+internal sealed record MatrixExpansion
 {
     public required IReadOnlyList<MatrixCombination> Combinations { get; init; }
 
@@ -103,7 +103,7 @@ public sealed record MatrixExpansion
 ///   <item>the product is capped at 256 combinations per workflow run, hosted and self-hosted alike.</item>
 /// </list>
 /// </remarks>
-public static class MatrixExpander
+internal static class MatrixExpander
 {
     /// <summary>The documented ceiling on matrix combinations per workflow run.</summary>
     public const int MaxCombinations = 256;

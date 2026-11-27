@@ -60,6 +60,8 @@ never a release decision.
   and lockfile to MSBuild incremental inputs, and strengthened Playwright assertions for diagnostic lines
   and analysis-time network silence.
 - Corrected stale Gate 2, test-command, deferred-ADR and public-surface documentation.
+- Narrowed Core to an exact 41-type public contract allowlist, added repository-wide LF attributes, and
+  supplied the development-only CodeMirror lint types required by `lang-json` declarations.
 
 ### Added
 

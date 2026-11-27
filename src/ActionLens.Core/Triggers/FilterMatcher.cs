@@ -55,7 +55,7 @@ public enum FilterListMode
 /// and why path patterns match from the repository root).
 /// </para>
 /// </remarks>
-public sealed class FilterPattern
+internal sealed class FilterPattern
 {
     /// <summary>Standing for "repeat without end" in an atom's bounds.</summary>
     private const int Unbounded = int.MaxValue;
@@ -429,7 +429,7 @@ public sealed class FilterPattern
 /// The documented rules over one filter's <em>list</em> of patterns, on top of the single-pattern engine
 /// in <see cref="FilterPattern"/>.
 /// </summary>
-public static class FilterMatcher
+internal static class FilterMatcher
 {
     /// <summary>Compiles every pattern of a filter key, keeping order, text and positions.</summary>
     public static IReadOnlyList<FilterPattern> CompileAll(IReadOnlyList<WorkflowValue> values)
@@ -550,7 +550,7 @@ public static class FilterMatcher
 /// <param name="DecidingPattern">The last pattern that matched, null when no pattern matched at all.</param>
 /// <param name="Value">The value that was tested; null when there was nothing to test.</param>
 /// <param name="ValuesTested">How many values the list was run against; one for a ref, many for paths.</param>
-public readonly record struct FilterMatch(
+internal readonly record struct FilterMatch(
     bool Satisfied,
     FilterPattern? DecidingPattern,
     string? Value,

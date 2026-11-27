@@ -16,7 +16,7 @@ namespace ActionLens.Core.Text;
 /// so instead of looking like it jumped to the wrong line.
 /// </para>
 /// </remarks>
-public sealed class SourceMap
+internal sealed class SourceMap
 {
     public static SourceMap Empty { get; } = new();
 

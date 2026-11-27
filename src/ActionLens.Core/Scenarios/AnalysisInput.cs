@@ -21,7 +21,7 @@ namespace ActionLens.Core.Scenarios;
 /// analyses of the same inputs therefore produce the same report bytes.
 /// </para>
 /// </remarks>
-public sealed record AnalysisInput
+internal sealed record AnalysisInput
 {
     /// <summary>
     /// The payload is as untrusted as the workflow text and gets the same byte ceiling. Without it a

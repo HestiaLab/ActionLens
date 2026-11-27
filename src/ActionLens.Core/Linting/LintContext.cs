@@ -18,7 +18,7 @@ namespace ActionLens.Core.Linting;
 /// <see cref="EngineFindings"/> hands back stay valid for the merge in <see cref="LintResult"/>.
 /// </para>
 /// </remarks>
-public sealed record LintContext
+internal sealed record LintContext
 {
     public required WorkflowDocument Workflow { get; init; }
 
@@ -101,7 +101,7 @@ public sealed record LintContext
 /// One <c>if:</c> value with the scope it belongs to. <see cref="FallbackRange"/> is where to point when the
 /// condition itself carries no position, which only happens for a model built without source maps.
 /// </summary>
-public sealed record LintCondition(string Scope, WorkflowValue Condition, SourceRange FallbackRange, bool IsStep)
+internal sealed record LintCondition(string Scope, WorkflowValue Condition, SourceRange FallbackRange, bool IsStep)
 {
     public SourceRange Range => Condition.Range.IsKnown ? Condition.Range : FallbackRange;
 

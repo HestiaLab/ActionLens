@@ -77,7 +77,7 @@ public static class WorkflowAnalyzer
     /// The same analysis with an input the caller built, for the contexts a payload cannot carry —
     /// repository variables and dispatch inputs supplied out of band.
     /// </summary>
-    public static AnalysisReport Analyze(
+    internal static AnalysisReport Analyze(
         string? yaml,
         string? fileName,
         AnalysisInput? input,
@@ -154,7 +154,7 @@ public static class WorkflowAnalyzer
     }
 
     /// <summary>Runs the whole pipeline over an already-loaded workflow and a caller-built input.</summary>
-    public static AnalysisReport Analyze(
+    internal static AnalysisReport Analyze(
         WorkflowLoadResult load,
         AnalysisInput? input = null,
         Scenario? scenario = null,

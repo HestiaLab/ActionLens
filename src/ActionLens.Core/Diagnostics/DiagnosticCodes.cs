@@ -4,7 +4,7 @@ namespace ActionLens.Core.Diagnostics;
 /// Stable identifiers for every finding ActionLens can produce. Codes are part of the observable
 /// output (JSON export, UI problem list), so they are never reused or renumbered.
 /// </summary>
-public static class DiagnosticCodes
+internal static class DiagnosticCodes
 {
     // --- Yaml stage: the text could not be read as one workflow document. ---
     public const string YamlSyntax = "YAML001";

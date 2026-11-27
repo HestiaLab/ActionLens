@@ -157,6 +157,6 @@ remains a separate, explicit act.
 4. **Structural cleanup, after the functional freeze** — done in three batches: the duplicated
    Levenshtein / JSON-to-value conversions were folded into shared helpers, internal implementation
    types were narrowed out of the public surface, and the four longest Core files were split into
-   partials (`docs/review-v1-grill.md` §§16–18). `PublicSurfaceTests` pins the key contract and
-   internal boundaries; it is not an exhaustive allowlist. The first Pages deployment and the first
-   release are still explicit, unperformed acts.
+   partials (`docs/review-v1-grill.md` §§16–18). `PublicSurfaceTests` pins the exact 41-type public
+   contract allowlist and the key internal boundaries. The first Pages deployment and the first release
+   are still explicit, unperformed acts.

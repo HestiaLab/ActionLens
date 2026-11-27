@@ -9,7 +9,7 @@ namespace ActionLens.Core.Linting;
 /// expression and graph layers already produced instead of detecting the same problem twice; see
 /// <see cref="LintFinding.Promoting"/>.
 /// </remarks>
-public interface ILintRule
+internal interface ILintRule
 {
     /// <summary>The rule's id, severity and help link, taken from <see cref="LintRuleTable"/>.</summary>
     LintRuleDescriptor Descriptor { get; }

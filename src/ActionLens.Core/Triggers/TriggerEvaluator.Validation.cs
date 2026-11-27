@@ -3,7 +3,7 @@ using ActionLens.Core.Workflows;
 
 namespace ActionLens.Core.Triggers;
 
-public static partial class TriggerEvaluator
+internal static partial class TriggerEvaluator
 {
     /// <summary>
     /// The findings an <c>on:</c> section carries whatever event is asked about, because each of them is a

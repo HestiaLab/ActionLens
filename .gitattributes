@@ -1,0 +1,20 @@
+* text=auto eol=lf
+
+*.cs text eol=lf
+*.razor text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+*.sln text eol=lf
+*.slnx text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.editorconfig text eol=lf
+*.gitignore text eol=lf

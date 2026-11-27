@@ -14,7 +14,7 @@ namespace ActionLens.Core.Triggers;
 /// event a reader is asking about. The verdict, by contrast, only exists once somebody names an event:
 /// "did this trigger fire" has no answer for an event nobody chose.
 /// </remarks>
-public sealed record TriggerEvaluation
+internal sealed record TriggerEvaluation
 {
     /// <summary>Findings from the <c>on:</c> section, in the order the events were written.</summary>
     public required IReadOnlyList<Diagnostic> Diagnostics { get; init; }

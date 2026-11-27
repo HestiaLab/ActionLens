@@ -8,7 +8,7 @@ namespace ActionLens.Core.Expressions;
 /// three-state logic or about which contexts are available where, which keeps parsing a question of
 /// syntax and evaluation a question of meaning.
 /// </summary>
-public abstract record ExpressionNode(SourceRange Range);
+internal abstract record ExpressionNode(SourceRange Range);
 
 /// <summary>A quoted string, a number, or one of <c>true</c>, <c>false</c>, <c>null</c>.</summary>
 internal sealed record LiteralNode(GitHubValue Value, SourceRange Range) : ExpressionNode(Range);
@@ -17,10 +17,10 @@ internal sealed record LiteralNode(GitHubValue Value, SourceRange Range) : Expre
 /// The root of a context path: <c>github</c> in <c>github.event.action</c>. Whether the name is a
 /// legal context in this position is an evaluation question, so parsing keeps it as a bare name.
 /// </summary>
-public sealed record ContextNode(string Name, SourceRange Range) : ExpressionNode(Range);
+internal sealed record ContextNode(string Name, SourceRange Range) : ExpressionNode(Range);
 
 /// <summary><c>a.b</c>.</summary>
-public sealed record MemberAccessNode(ExpressionNode Target, string Name, SourceRange Range) : ExpressionNode(Range);
+internal sealed record MemberAccessNode(ExpressionNode Target, string Name, SourceRange Range) : ExpressionNode(Range);
 
 /// <summary><c>a['b']</c> or <c>a[0]</c>. The index is any expression, because GitHub allows one.</summary>
 internal sealed record IndexAccessNode(ExpressionNode Target, ExpressionNode Index, SourceRange Range) : ExpressionNode(Range);
@@ -85,7 +85,7 @@ internal sealed record ComparisonNode(
 /// A function call such as <c>contains(github.event.files, 'x')</c>. Function names are
 /// case-insensitive in Actions; the node keeps the text as written so messages can quote the author.
 /// </summary>
-public sealed record FunctionCallNode(
+internal sealed record FunctionCallNode(
     string Name,
     IReadOnlyList<ExpressionNode> Arguments,
     SourceRange Range) : ExpressionNode(Range);

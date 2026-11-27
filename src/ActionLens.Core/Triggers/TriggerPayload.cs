@@ -37,7 +37,7 @@ namespace ActionLens.Core.Triggers;
 ///   the caller knows it; the webhook's own <c>commits</c> list stops at 20 entries and so proves nothing.</description></item>
 /// </list>
 /// </remarks>
-public sealed record TriggerPayload
+internal sealed record TriggerPayload
 {
     /// <summary>The payload that knows nothing, which is what an analysis without an event payload uses.</summary>
     public static TriggerPayload Empty { get; } = new();

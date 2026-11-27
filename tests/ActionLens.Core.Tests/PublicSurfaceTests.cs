@@ -1,27 +1,65 @@
 namespace ActionLens.Core.Tests;
 
 /// <summary>
-/// Decision F asks for one public entry point. §7 recorded that roughly 55 of 60 Core files exposed a
-/// public type; after the post-gate narrowing pass, the model and finding types that the JSON export
-/// and the UI actually consume remain public, while implementation details are internal.
-/// This test pins that boundary so a future "make it public, it's easier" edit cannot quietly widen
-/// the API again. The compiler already enforces the other direction: a type used in a public signature
-/// cannot be made internal (CS0050/CS0051/CS0053/CS0060).
+/// The complete Core export surface. Everything else is implementation, even when it is useful inside the
+/// engine or its tests, so a future "make it public, it's easier" edit has to change this list deliberately.
 /// </summary>
 public sealed class PublicSurfaceTests
 {
-    /// <summary>The types that are genuinely part of the contract the reader and the UI rely on.</summary>
-    [Theory]
-    [InlineData("ActionLens.Core.WorkflowAnalyzer")]
-    [InlineData("ActionLens.Core.Reporting.AnalysisReport")]
-    [InlineData("ActionLens.Core.Diagnostics.Diagnostic")]
-    [InlineData("ActionLens.Core.Diagnostics.DiagnosticSource")]
-    [InlineData("ActionLens.Core.Scenarios.Scenario")]
-    public void ContractTypes_ArePublic(string fullName)
+    private static readonly string[] ContractTypes =
+    [
+        "ActionLens.Core.Diagnostics.Diagnostic",
+        "ActionLens.Core.Diagnostics.DiagnosticSeverity",
+        "ActionLens.Core.Diagnostics.DiagnosticSource",
+        "ActionLens.Core.Diagnostics.DiagnosticStage",
+        "ActionLens.Core.Expressions.TriKind",
+        "ActionLens.Core.Expressions.TriValue",
+        "ActionLens.Core.Expressions.UnknownReason",
+        "ActionLens.Core.Expressions.UnknownReasonKind",
+        "ActionLens.Core.Graph.LayoutEdge",
+        "ActionLens.Core.Graph.LayoutNode",
+        "ActionLens.Core.Reporting.AnalysisReport",
+        "ActionLens.Core.Reporting.AnalysisReportJson",
+        "ActionLens.Core.Reporting.DeclaredTrigger",
+        "ActionLens.Core.Reporting.EventReport",
+        "ActionLens.Core.Reporting.GraphReport",
+        "ActionLens.Core.Reporting.JobReport",
+        "ActionLens.Core.Reporting.MatrixReport",
+        "ActionLens.Core.Reporting.NodePlacement",
+        "ActionLens.Core.Reporting.ReportTotals",
+        "ActionLens.Core.Reporting.ScenarioPin",
+        "ActionLens.Core.Reporting.ScenarioReport",
+        "ActionLens.Core.Reporting.TriggerReport",
+        "ActionLens.Core.Reporting.WorkflowIdentity",
+        "ActionLens.Core.Scenarios.ConditionTrace",
+        "ActionLens.Core.Scenarios.JobOutcome",
+        "ActionLens.Core.Scenarios.JobOutcomeText",
+        "ActionLens.Core.Scenarios.MatrixRun",
+        "ActionLens.Core.Scenarios.NeedOutcome",
+        "ActionLens.Core.Scenarios.RunState",
+        "ActionLens.Core.Scenarios.Scenario",
+        "ActionLens.Core.Scenarios.ScenarioJobState",
+        "ActionLens.Core.Scenarios.StepRunResult",
+        "ActionLens.Core.Text.SourcePosition",
+        "ActionLens.Core.Text.SourceRange",
+        "ActionLens.Core.Triggers.FilterDecision",
+        "ActionLens.Core.Triggers.FilterListMode",
+        "ActionLens.Core.Triggers.TriggerEventSource",
+        "ActionLens.Core.Triggers.TriggerVerdict",
+        "ActionLens.Core.Values.GitHubValue",
+        "ActionLens.Core.Values.GitHubValueKind",
+        "ActionLens.Core.WorkflowAnalyzer",
+    ];
+
+    [Fact]
+    public void ExportedTypes_AreExactlyTheContractAllowlist()
     {
-        var type = typeof(WorkflowAnalyzer).Assembly.GetType(fullName);
-        Assert.NotNull(type);
-        Assert.True(type!.IsPublic, $"{fullName} is part of the observable contract and must stay public.");
+        var exported = typeof(WorkflowAnalyzer).Assembly.GetExportedTypes()
+            .Select(type => type.FullName!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(ContractTypes.Order(StringComparer.Ordinal), exported);
     }
 
     /// <summary>These are internal machinery; exposing them again would widen the API for no reason.</summary>
@@ -32,6 +70,8 @@ public sealed class PublicSurfaceTests
     [InlineData("ActionLens.Core.Expressions.ExpressionFunctions")]
     [InlineData("ActionLens.Core.Linting.Rules.ScriptInjectionRule")]
     [InlineData("ActionLens.Core.Linting.Rules.RunnerLabelTypoRule")]
+    [InlineData("ActionLens.Core.Yaml.WorkflowLoader")]
+    [InlineData("ActionLens.Core.Triggers.TriggerEvaluator")]
     public void ImplementationTypes_AreNotExported(string fullName)
     {
         var type = typeof(WorkflowAnalyzer).Assembly.GetType(fullName);
@@ -42,8 +82,6 @@ public sealed class PublicSurfaceTests
     [Fact]
     public void NoMoreThanOneEntryPointHasTheWordEngine()
     {
-        // A coarse guard: only the analyzer is a public "engine". ScenarioEngine, LintEngine and the
-        // evaluators are stages it drives, not alternative front doors.
         var publicEngines = typeof(WorkflowAnalyzer).Assembly.GetExportedTypes()
             .Where(type => type.Name.EndsWith("Engine", StringComparison.Ordinal))
             .Select(type => type.Name)

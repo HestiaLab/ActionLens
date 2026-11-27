@@ -32,7 +32,7 @@ namespace ActionLens.Core.Triggers;
 /// the facts they would need are a clock and a person ([ADR 0001]).
 /// </para>
 /// </remarks>
-public static partial class TriggerEvaluator
+internal static partial class TriggerEvaluator
 {
     /// <summary>The three include/exclude pairs the documentation forbids on one event.</summary>
     private static readonly (string Include, string Ignore)[] ExclusivePairs =

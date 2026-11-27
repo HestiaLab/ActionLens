@@ -7,7 +7,7 @@ namespace ActionLens.Core.Workflows;
 /// boolean <c>true</c>, so the loader normalises every spelling of that key into this model rather
 /// than expecting authors to quote it.
 /// </summary>
-public sealed record TriggerSection
+internal sealed record TriggerSection
 {
     /// <summary>Events keyed by name, in the order written.</summary>
     public required IReadOnlyDictionary<string, EventTrigger> Events { get; init; }
@@ -22,7 +22,7 @@ public sealed record TriggerSection
 }
 
 /// <summary>One event under <c>on:</c>, with whatever filters the author attached.</summary>
-public sealed record EventTrigger
+internal sealed record EventTrigger
 {
     public required string Name { get; init; }
 
@@ -54,7 +54,7 @@ public sealed record EventTrigger
 }
 
 /// <summary>A declared <c>workflow_dispatch</c> or <c>workflow_call</c> input.</summary>
-public sealed record WorkflowInput
+internal sealed record WorkflowInput
 {
     /// <summary><c>string</c>, <c>boolean</c>, <c>number</c> or <c>choice</c>; null when not declared.</summary>
     public string? Type { get; init; }

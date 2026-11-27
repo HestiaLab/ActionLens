@@ -19,7 +19,7 @@ namespace ActionLens.Core.Expressions;
 ///     against one is <see langword="false"/> unless both operands resolved to the same value.</item>
 /// </list>
 /// </remarks>
-public static class ExpressionCoercion
+internal static class ExpressionCoercion
 {
     /// <summary>
     /// GitHub's loose equality. <paramref name="sameInstance"/> carries what the evaluator knows about
