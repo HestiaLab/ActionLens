@@ -33,6 +33,9 @@ export function watchPage(page: Page) {
 
 /** Waits until the analysis has produced a report and the editor is no longer loading. */
 export async function waitForAnalysis(page: Page) {
+  await page.route('**/_framework/dotnet-browser-tools/hot-reload-settings.json', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"hotReload":false}' }),
+  );
   await page.goto('/');
   await expect(page.locator('.al-panel')).toHaveCount(4, { timeout: 30_000 });
   await expect(page.locator('.al-diagnostics')).toBeVisible();
