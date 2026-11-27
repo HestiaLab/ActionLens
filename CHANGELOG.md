@@ -64,6 +64,8 @@ never a release decision.
   supplied the development-only CodeMirror lint types required by `lang-json` declarations.
 - Declared the existing PNG favicon so Linux Chromium no longer requests a missing `/favicon.ico`, and
   included resource URLs in browser-test console diagnostics.
+- Ran the Playwright web server in Production without a launch profile, avoiding Development-only
+  Blazor Browser Tools requests that return 404 on Linux.
 
 ### Added
 
